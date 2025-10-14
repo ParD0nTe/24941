@@ -64,9 +64,7 @@ int main(void){
             buf[lines[op].len]='\0';
             printf("%s\n",buf);
         }
-        alarm(5);
         scanf("%d", &op);
-        alarm(0);
     }
     return 0;
 
