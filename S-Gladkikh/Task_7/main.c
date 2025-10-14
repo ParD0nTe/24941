@@ -57,9 +57,6 @@ int main(void){
             op--;
             printf("%s\n",lines[op].string);
         }
-        alarm(5);
-        scanf("%d", &op);
-        alarm(0);
     }
     return 0;
 
