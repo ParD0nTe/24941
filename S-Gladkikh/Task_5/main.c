@@ -25,13 +25,17 @@ int main(void){
             }
             lines[lCnt].len++;
         }
-        if(c != '\0'){
+        if(c == '\n'){
             lines[lCnt].len--;
         }
         offset = lseek(descr,0,SEEK_CUR);
         lCnt++;
     }
+    for(int i=0;i<lCnt;i++){
+        printf("Line %d:\noffset=%ld\nlen=%d\n\n",i+1,lines[i].begin,lines[i].len);
+    }
     int op = 0;
+    printf("Line number:");
     scanf("%d", &op);
     while(op != -1){
         if(op > lCnt || op < 1){
@@ -45,6 +49,7 @@ int main(void){
             buf[lines[op].len]='\0';
             printf("%s\n",buf);
         }
+        printf("Line number:");
         scanf("%d", &op);
     }
     return 0;
