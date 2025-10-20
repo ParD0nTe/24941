@@ -1,0 +1,3 @@
+
+Этот вывод выполнил ПОДпроцесс
+this is text from file.txt
