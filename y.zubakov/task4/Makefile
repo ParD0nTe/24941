@@ -1,0 +1,2 @@
+all:
+	g++ task4.cpp -o task4
