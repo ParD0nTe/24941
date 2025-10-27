@@ -95,22 +95,29 @@ int main (int argc, char* argv[]) {
             struct tm* timeinfo = localtime(&st.st_mtime);
             strftime(time_buf, sizeof(time_buf), "%b %d %H:%M", timeinfo);
     
-    
-            printf("%c%s%s%s %-8s %-8s ",
+            char* display_name = (strcmp(filename, ".") == 0) ? "." : filename;
+
+            printf("%c%s%s%s %ld %-8s %-8s %ld %12s %s\n",
                 fst_bit,                                        // d/-/?
-                rights[own_r], rights[group_r], rights[user_r], // права
+                rights[own_r],
+                rights[group_r],
+                rights[user_r],                                 // права
+                (long)st.st_nlink,
                 pswd->pw_name,                                  // Имена собственника 
-                grp->gr_name);                                  // и группы файла
-            
-            // Если файл является обычным файлом, его размер. Иначе оставьте это поле пустым.
-            if (fst_bit == '-') {
-                printf("%8ld ", st.st_size);
-            }
-    
-            printf("%12s %s\n",
-                time_buf,           // Дату модификации файла (используйте mtime).
-                filename);          // Имя файла (если было задано имя с путем, нужно распечатать только имя).
-        }
+                grp->gr_name,
+                st.st_size,
+                time_buf,
+                display_name);                                  // и группы файла
+                
+                // printf("%12s %s\n",
+                //     time_buf,           // Дату модификации файла (используйте mtime).
+                //     filename);          // Имя файла (если было задано имя с путем, нужно распечатать только имя).
+                // }
+                
+                // // Если файл является обычным файлом, его размер. Иначе оставьте это поле пустым.
+                // if (fst_bit == '-') {
+                //     printf("%8ld ", st.st_size);
+                }
     }
 
     return 0;
