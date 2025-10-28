@@ -97,7 +97,7 @@ int main (int argc, char* argv[]) {
     
             char* display_name = (strcmp(filename, ".") == 0) ? "." : filename;
 
-            printf("%c%s%s%s %ld %-8s %-8s %ld %12s %s\n",
+            printf("%c%s%s%s %3ld %-12s %-12s %7ld %12s %s\n",
                 fst_bit,                                        // d/-/?
                 rights[own_r],
                 rights[group_r],
@@ -119,6 +119,21 @@ int main (int argc, char* argv[]) {
                 //     printf("%8ld ", st.st_size);
                 }
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     return 0;
 }

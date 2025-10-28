@@ -49,7 +49,7 @@ void u_flag() {
 
     struct rlimit rlim;
     // получаем SOFT and HARD ограничения на размеры файлов
-    if (getrlimit(RLIMIT_NPROC, &rlim) == -1) {
+    if (getrlimit(RLIMIT_CPU, &rlim) == -1) {
         perror("Failed with getrlimit for FILE");
         return;
     }
@@ -72,7 +72,7 @@ void U_flag(const char* str) {
     else {
         struct rlimit rlim;
         
-        if (getrlimit(RLIMIT_NPROC, &rlim) == -1) {
+        if (getrlimit(RLIMIT_CPU, &rlim) == -1) {
             perror("Failed with getrlimit for NPROC in U_flag");
             return;
         }
@@ -85,7 +85,7 @@ void U_flag(const char* str) {
 
         rlim.rlim_cur = arg;
         
-        if (setrlimit(RLIMIT_NPROC, &rlim) == -1) {
+        if (setrlimit(RLIMIT_CPU, &rlim) == -1) {
             perror("Failed with setrlimit for NPROC in U_flag");
             return;
         }
