@@ -28,5 +28,5 @@ int main() {
     signal(SIGINT,  &signal_SIGINT);
     signal(SIGQUIT, &signal_SIGQUIT);
 
-    for(;;);
+    while(1);
 }
