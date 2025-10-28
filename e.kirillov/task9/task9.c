@@ -4,11 +4,17 @@
 
 int main() {
     pid_t pid = fork();
+        
+    // не получилось создать подпроцесс
+    if (pid == -1) {
+        perror("Failed create P_PID\n");
+        return 1;
+    }
 
     if (pid == 0) {
         // Дочерний процесс
         execlp("cat", "childProccess", "../task3/task3.c", NULL);
-        // Если сюда попали - значит ошибка
+        // ошибка
         perror("execlp failed");
         return 1;
     }

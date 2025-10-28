@@ -8,6 +8,12 @@ int main(int argc, char *argv[]) {
 
     pid_t pid = fork();
 
+    // не получилось создать подпроцесс
+    if (pid == -1) {
+        perror("Failed create P_PID\n");
+        return 1;
+    }
+
     if (pid == 0) {
         // Дочерний процесс
         execvp(argv[1], argv + 1);
