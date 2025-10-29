@@ -1,0 +1,41 @@
+# --- IDE / misc ---
+.idea/
+
+# --- CMake build dirs everywhere ---
+**/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+**/Testing/
+**/CMakeScratch/
+
+# --- Compiled/binary artifacts ---
+**/*.o
+**/*.obj
+**/*.d
+**/*.pdb
+**/*.exe
+**/*.out
+**/*.a
+**/*.so
+**/*.dll
+**/*.lib
+
+# --- Windows alt streams dumped by WSL ---
+*.Zone.Identifier
+**/*:Zone.Identifier
+
+# --- Common bare executables produced by tasks ---
+**/main
+**/reader
+**/prog
+
+# --- Keep these (negate above ignores) ---
+!**/*.c
+!**/*.h
+!**/*.txt
+!**/*.pdf
+!**/*.docx
+!**/CMakeLists.txt
+!README.md
