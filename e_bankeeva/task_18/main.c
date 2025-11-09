@@ -11,7 +11,7 @@ void printFileInfo(const char *path)
     struct stat fileInfo;
     if (stat(path, &fileInfo) == -1)
     {
-        perror("No such file or dir\n");
+        perror("\n");
         return;
     }
 
