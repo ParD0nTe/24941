@@ -1,0 +1,17 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h> // For fork(), execlp()
+#include <sys/wait.h> // For wait()
+int main(void){
+    pid_t cpid;
+    printf("Forking...");
+    cpid = fork();
+    if(cpid==0){
+        printf("YUP");
+        execlp("cat","cat","test.txt",NULL);
+        exit(0);
+    }
+    waitpid(cpid,NULL,0);
+    printf("Finished");
+    return 0;
+}
