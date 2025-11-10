@@ -4,7 +4,7 @@
 #include <sys/wait.h> // For wait()
 int main(void){
     pid_t cpid;
-    printf("Forking...");
+    printf("Forking...\n");
     cpid = fork();
     if(cpid==0){
         printf("YUP");
@@ -12,6 +12,6 @@ int main(void){
         exit(0);
     }
     waitpid(cpid,NULL,0);
-    printf("Finished");
+    printf("Finished\n");
     return 0;
 }
