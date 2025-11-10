@@ -7,11 +7,10 @@ int main(void){
     printf("Forking...\n");
     cpid = fork();
     if(cpid==0){
-        printf("YUP");
         execlp("cat","cat","test.txt",NULL);
         exit(0);
     }
     waitpid(cpid,NULL,0);
-    printf("Finished\n");
+    printf("\nFinished\n");
     return 0;
 }
