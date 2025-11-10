@@ -8,9 +8,10 @@ int main(void){
     flk.l_start=0;
     flk.l_len=0;
     int dscr=open("a.txt",O_WRONLY);
+    fcntl(dscr,F_SETLK,&flk);
     const char *test="123";
     write(dscr,test,3);
-    system("nano");
+    system("nano a.txt");
     while (1)
     {
     }
