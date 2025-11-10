@@ -1,5 +1,6 @@
 #include "fcntl.h"
 #include "unistd.h"
+#include "stdlib.h"
 int main(void){
     struct flock flk;
     flk.l_type=F_WRLCK;
@@ -9,6 +10,7 @@ int main(void){
     int dscr=open("a.txt",O_WRONLY);
     const char *test="123";
     write(dscr,test,3);
+    system("nano");
     while (1)
     {
     }
