@@ -37,7 +37,7 @@ int main () {
     
     // хранится же локально, значит можно указать свой путь
     // const char* path_socket = "/mnt/d/Desktop/VSCODE/24941/d.golomolzin/30task/socket";
-    const char* path_socket = "/tmp/socket";
+    const char* path_socket = "/home/students/24200/d.golomolzin/24941/d.golomolzin/30task/socket";
     // если неполучилось создать И если не ошибка отсутсвия файла (ПРОСТО ОТЧИСТКА ПРЕДЫДУЩЕГО СОКЕТА)
     if (unlink(path_socket) == -1 && errno != 2) {
         perror("unlink");
