@@ -26,6 +26,8 @@ int main(void){
     struct termios params;
     tcgetattr(0,&params);
     params.c_lflag &= ~(ICANON|ECHO);
+    params.c_cc[VMIN]=1;
+    params.c_cc[VTIME]=1;
     tcsetattr(0,TCSANOW,&params);
     char buf[41];
     buf[40]='\0';
