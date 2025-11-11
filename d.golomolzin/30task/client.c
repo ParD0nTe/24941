@@ -30,7 +30,7 @@ int main () {
         return 1;
     }
     
-    const char* path_socket = "/home/students/24200/d.golomolzin/24941/d.golomolzin/30task/socket";
+    const char* path_socket = "/tmp/socket";
 
     // структура для адреса Unix socket
     struct sockaddr_un address;

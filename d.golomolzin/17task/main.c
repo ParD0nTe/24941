@@ -8,12 +8,19 @@
 
 #define MAX_LINE_LEN 40 // максимальная длина строки
 #define MAX_MAX_LEN 10 * MAX_LINE_LEN
-#define ERASE 0x7F  // стерать
+#define ERASE  0x7F // удалить символ
 #define CTRL_U 0x15 // очистка строки
 #define CTRL_W 0x17 // очистка слова
 #define CTRL_D 0x04 // завершение
 #define CTRL_G 0x07 // звук ??
 #define CTRL_A 0x01 // + полная отчистка
+
+#define UP     "\033[A"
+#define DOWN   "\033[B"
+#define RIGHT  "\033[C"
+#define LEFT   "\033[D"
+#define SOUND  "\a"
+#define DELETE "\b \b"
 
 
 char buf[MAX_MAX_LEN + 1];
@@ -37,11 +44,16 @@ void setup_terminal() {
         exit(1);
     }
     
+    // восстанавливаем настройки терминала после заверешения работы программы
     atexit(restore_terminal);
     
     new_termios = original_termios;
+    // отключение канонического режима (символы передаются программе немедленно - без встроенной буферизации)
+    // отключение эхо (символы не отображаются (программа сама управляет выводом))
     new_termios.c_lflag &= ~(ICANON | ECHO);
+    // минимальное количество символов для чтения (в нашем случае 1)
     new_termios.c_cc[VMIN] = 1;
+    // таймаут чтения в десятых долях секунды (в нашем случае 0 - бесконечное ожидание)
     new_termios.c_cc[VTIME] = 0;
     
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios) == -1) {
@@ -103,16 +115,16 @@ int main() {
                 curr_row--;
                 
                 // Перемещаем курсор в конец предыдущей строки
-                write(1, "\033[A", 3); // переходим на строку вверх
+                write(1, UP, 3); // переходим на строку вверх
                 for (int i = 0; i < MAX_LINE_LEN; i++) {
-                    write(1, "\033[C", 3); // перемещаемся в конец строки
+                    write(1, RIGHT, 3); // перемещаемся в конец строки
                 }
                 // Удаляем последний символ предыдущей строки
-                write(1, "\b \b", 3);
+                write(1, DELETE, 3);
             } 
             else {
                 // Обычное удаление символа
-                write(1, "\b \b", 3);
+                write(1, DELETE, 3);
             }
         }
         // если символ ПОЛНОГО стирания CTRL^A
@@ -130,7 +142,7 @@ int main() {
                     }
                     write(1, "\r", 1);
 
-                    if (i < curr_row) write(1, "\033[A", 3);
+                    if (i < curr_row) write(1, UP, 3);
                 }
                 write(1, "\r", 1);
 
@@ -150,7 +162,7 @@ int main() {
             if (chars_to_delete > 0) {
                 // удаляем символы на экране
                 for (int i = 0; i < chars_to_delete; i++) {
-                    write(1, "\b \b", 3);
+                    write(1, DELETE, 3);
                 }
                 // Очищаем буфер
                 for (int i = current_line_start; i < cursor; i++) {
@@ -197,15 +209,15 @@ int main() {
                 if (cursor % MAX_LINE_LEN == MAX_LINE_LEN - 1 && curr_row > 0) {
                     // если удалили символ перевода строки
                     curr_row--;
-                    write(1, "\033[A", 3);
+                    write(1, UP, 3);
                     write(1, "\r", 1);
                     for (int i = 0; i < MAX_LINE_LEN; i++) {
-                        write(1, "\033[C", 3);
+                        write(1, RIGHT, 3);
                     }
-                    write(1, "\b \b", 3);
+                    write(1, DELETE, 3);
                 }
                 else {
-                    write(1, "\b \b", 3);
+                    write(1, DELETE, 3);
                 }
             }
         }
@@ -224,9 +236,9 @@ int main() {
                     curr_row++;
                 }
             }
-            else write(1, "\a", 1);
+            else write(1, SOUND, 1);
         }
-        else write(1, "\a", 1);
+        else write(1, SOUND, 1);
     
     }
     return 0;
