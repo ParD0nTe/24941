@@ -80,6 +80,9 @@ int main()
                 lines++;
                 len = 0;
 
+                printf("\r%-40s", line[lines]);
+                fflush(stdout);
+
                 continue;
             }
 
