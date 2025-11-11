@@ -37,6 +37,7 @@ int main(void){
         int wordpos;
         const char bell = 7;
         switch(c){
+            case EOF:break;
             case 4:
                 if(bufSize==0) return 0;
                 break;
