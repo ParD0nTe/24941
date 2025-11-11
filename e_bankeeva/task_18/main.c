@@ -49,7 +49,7 @@ void printFileInfo(const char *path)
     const int nlink = fileInfo.st_nlink;
 
     off_t size = fileInfo.st_size;
-    if (type != '-') size = 0;
+    if (type == '?') size = 0;
 
     char time[100];
     const struct tm *tm_info = localtime(&fileInfo.st_mtime);
