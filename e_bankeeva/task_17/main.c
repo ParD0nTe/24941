@@ -154,6 +154,7 @@
 //     return 0;
 // }
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
@@ -163,10 +164,17 @@
 #define BELL "\a"
 #define BACKSPACE "\b \b"
 
-void setup_terminal(struct termios *original) {
+struct termios original_settings;
+
+void restore_terminal(void) {
+    tcsetattr(STDIN_FILENO, TCSANOW, &original_settings);
+}
+
+void setup_terminal(void) {
     struct termios new;
-    tcgetattr(STDIN_FILENO, original);
-    new = *original;
+    tcgetattr(STDIN_FILENO, &original_settings);
+    atexit(restore_terminal);
+    new = original_settings;
     new.c_lflag &= ~(ICANON | ECHO);
     new.c_cc[VMIN] = 1;
     new.c_cc[VTIME] = 0;
@@ -224,9 +232,7 @@ void wrap_line(char *str, int *len, int *last_space, char ch) {
 }
 
 int main() {
-    struct termios original;
-    setup_terminal(&original);
-    atexit((void(*)())restore_terminal, &original);
+    setup_terminal();
 
     char str[MAX_LEN + 1] = {0};
     int len = 0, last_space = -1;
@@ -243,13 +249,19 @@ int main() {
                 break;
 
             case 21: // Ctrl+U (Kill)
-                while (len-- > 0) write(STDOUT_FILENO, BACKSPACE, 3);
+                while (len > 0) {
+                    write(STDOUT_FILENO, BACKSPACE, 3);
+                    len--;
+                }
                 str[0] = '\0';
                 last_space = -1;
                 break;
 
             case 4: // Ctrl+D
-                if (len == 0) return 0;
+                if (len == 0) {
+                    write(STDOUT_FILENO, "\n", 1);
+                    return 0;
+                }
                 break;
 
             case 23: // Ctrl+W
@@ -260,6 +272,7 @@ int main() {
                 write(STDOUT_FILENO, "\n", 1);
                 len = 0;
                 last_space = -1;
+                str[0] = '\0';
                 break;
 
             default:
