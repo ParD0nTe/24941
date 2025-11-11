@@ -31,12 +31,9 @@
 //             {
 //                 line[lines][len - 1] = '\0';
 //
-//                 char buffer[41];
-//                 snprintf(buffer, sizeof(buffer), "\r%-40s", line[lines]);
-//                 write(STDOUT_FILENO, buffer, strlen(buffer));
+//                 printf("\r%-40s", line[lines]);
 //
-//                 // printf("\r%-40s", line[lines]);
-//                 // fflush(stdout);
+//                 fflush(stdout);
 //                 len--;
 //             }
 //             else if (lines > 0)
@@ -44,12 +41,8 @@
 //                 lines--;
 //                 len = strlen(line[lines]);
 //
-//                 char buffer[41];
-//                 snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//                 write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//                 // printf("\033[F\r%-40s", line[lines]);
-//                 // fflush(stdout);
+//                 printf("\033[F\r%-40s", line[lines]);
+//                 fflush(stdout);
 //             }
 //         }
 //         else if (symb == 0x15) // KILL CTRL-U
@@ -61,12 +54,8 @@
 //             line[lines][0] = '\0';
 //             len = 0;
 //
-//             char buffer[41];
-//             snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//             write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//             // printf("\r%-40s", line[lines]);
-//             // fflush(stdout);
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
 //         }
 //         else if (symb == 0x17) // CTRL-W
 //         {
@@ -81,12 +70,8 @@
 //                 line[lines][len] = '\0';
 //             }
 //
-//             char buffer[41];
-//             snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//             write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//             // printf("\r%-40s", line[lines]);
-//             // fflush(stdout);
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
 //         }
 //         else if (symb == 0x04) // CTRL-D
 //         {
@@ -99,12 +84,8 @@
 //                 lines++;
 //                 len = 0;
 //
-//                 char buffer[41];
-//                 snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//                 write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//                 // printf("\r%-40s", line[lines]);
-//                 // fflush(stdout);
+//                 printf("\r%-40s", line[lines]);
+//                 fflush(stdout);
 //
 //                 continue;
 //             }
@@ -126,22 +107,14 @@
 //                     line[lines][len] = word[idx - 1 - i];
 //                 }
 //
-//                 char buffer[41];
-//                 snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//                 write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//                 // printf("\r%-40s", line[lines]);
+//                 printf("\r%-40s", line[lines]);
 //             }
 //
 //             line[lines][len++] = symb;
 //             line[lines][len] = '\0';
 //
-//             char buffer[41];
-//             snprintf(buffer, sizeof(buffer), "\033[F\r%-40s", line[lines]);
-//             write(STDOUT_FILENO, buffer, strlen(buffer));
-//
-//             // printf("\r%-40s", line[lines]);
-//             // fflush(stdout);
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
 //         }
 //         else
 //         {
@@ -154,141 +127,119 @@
 //     return 0;
 // }
 
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <termios.h>
 #include <unistd.h>
+#include <termios.h>
+#include <ctype.h>
 #include <string.h>
 
+#define MAX_LINES 40
 #define MAX_LEN 40
-#define BELL "\a"
-#define BACKSPACE "\b \b"
 
-struct termios original_settings;
+int main()
+{
+    char line[MAX_LINES][MAX_LEN + 1] = {0};
+    int len = 0;
+    int lines = 0;
 
-void restore_terminal(void) {
-    tcsetattr(STDIN_FILENO, TCSANOW, &original_settings);
-}
+    struct termios termios_orig;
+    struct termios termios_new;
+    tcgetattr(STDIN_FILENO, &termios_orig);
+    termios_new = termios_orig;
+    termios_new.c_lflag &= ~(ICANON | ECHO);
+    termios_new.c_cc[VMIN] = 1;
+    termios_new.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_new);
 
-void setup_terminal(void) {
-    struct termios new;
-    tcgetattr(STDIN_FILENO, &original_settings);
-    atexit(restore_terminal);
-    new = original_settings;
-    new.c_lflag &= ~(ICANON | ECHO);
-    new.c_cc[VMIN] = 1;
-    new.c_cc[VTIME] = 0;
-    tcsetattr(STDIN_FILENO, TCSANOW, &new);
-}
+    char buffer[MAX_LEN + 10]; // для управляющих символов + строка
 
-void find_last_space(char *str, int len, int *last_space) {
-    *last_space = -1;
-    for (int i = len - 1; i >= 0; i--) {
-        if (str[i] == ' ') {
-            *last_space = i;
-            break;
+    while (1)
+    {
+        char symb = (char)getchar();
+
+        if (symb == 127) // Backspace
+        {
+            if (len > 0)
+            {
+                len--;
+                line[lines][len] = '\0';
+                write(STDOUT_FILENO, "\r", 1);
+                write(STDOUT_FILENO, line[lines], len);
+                for (int i = len; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+            }
+            else if (lines > 0)
+            {
+                lines--;
+                len = strlen(line[lines]);
+                write(STDOUT_FILENO, "\033[F\r", 4); // переместиться на предыдущую строку
+                write(STDOUT_FILENO, line[lines], len);
+                for (int i = len; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+            }
         }
-    }
-}
-
-void handle_word_erase(char *str, int *len, int *last_space) {
-    while (*len > 0 && str[*len - 1] == ' ') {
-        write(STDOUT_FILENO, BACKSPACE, 3);
-        (*len)--;
-    }
-    while (*len > 0 && str[*len - 1] != ' ') {
-        write(STDOUT_FILENO, BACKSPACE, 3);
-        (*len)--;
-    }
-    str[*len] = '\0';
-    find_last_space(str, *len, last_space);
-}
-
-void wrap_line(char *str, int *len, int *last_space, char ch) {
-    if (ch == ' ') {
-        write(STDOUT_FILENO, "\n ", 2);
-        *len = 1;
-        str[0] = ch;
-        *last_space = 0;
-    } else if (*last_space != -1) {
-        int move_len = *len - *last_space - 1;
-
-        write(STDOUT_FILENO, "\n", 1);
-        write(STDOUT_FILENO, str + *last_space + 1, move_len);
-        write(STDOUT_FILENO, &ch, 1);
-
-        memmove(str, str + *last_space + 1, move_len);
-        str[move_len] = ch;
-        *len = move_len + 1;
-
-        find_last_space(str, *len, last_space);
-    } else {
-        write(STDOUT_FILENO, "\n", 1);
-        write(STDOUT_FILENO, &ch, 1);
-        *len = 1;
-        str[0] = ch;
-        *last_space = -1;
-    }
-}
-
-int main() {
-    setup_terminal();
-
-    char str[MAX_LEN + 1] = {0};
-    int len = 0, last_space = -1;
-    char ch;
-
-    while (read(STDIN_FILENO, &ch, 1) > 0) {
-        switch (ch) {
-            case 127: // Backspace
-                if (len > 0) {
-                    write(STDOUT_FILENO, BACKSPACE, 3);
-                    str[--len] = '\0';
-                    if (len == last_space) find_last_space(str, len, &last_space);
-                }
-                break;
-
-            case 21: // Ctrl+U (Kill)
-                while (len > 0) {
-                    write(STDOUT_FILENO, BACKSPACE, 3);
-                    len--;
-                }
-                str[0] = '\0';
-                last_space = -1;
-                break;
-
-            case 4: // Ctrl+D
-                if (len == 0) {
-                    write(STDOUT_FILENO, "\n", 1);
-                    return 0;
-                }
-                break;
-
-            case 23: // Ctrl+W
-                if (len > 0) handle_word_erase(str, &len, &last_space);
-                break;
-
-            case 10: // Enter
-                write(STDOUT_FILENO, "\n", 1);
+        else if (symb == 0x15) // CTRL-U
+        {
+            len = 0;
+            line[lines][0] = '\0';
+            write(STDOUT_FILENO, "\r", 1);
+            for (int i = 0; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+            write(STDOUT_FILENO, "\r", 1);
+        }
+        else if (symb == 0x17) // CTRL-W
+        {
+            while (len > 0 && line[lines][len - 1] == ' ') len--;
+            while (len > 0 && line[lines][len - 1] != ' ') len--;
+            line[lines][len] = '\0';
+            write(STDOUT_FILENO, "\r", 1);
+            write(STDOUT_FILENO, line[lines], len);
+            for (int i = len; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+        }
+        else if (symb == 0x04) // CTRL-D
+        {
+            if (len == 0) break;
+        }
+        else if (isprint(symb) || symb == '\n')
+        {
+            if (symb == '\n')
+            {
+                lines++;
                 len = 0;
-                last_space = -1;
-                str[0] = '\0';
-                break;
+                write(STDOUT_FILENO, "\r", 1);
+                for (int i = 0; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+                write(STDOUT_FILENO, "\r", 1);
+                continue;
+            }
 
-            default:
-                if (ch < 32 || ch == 127) {
-                    write(STDOUT_FILENO, BELL, 1);
-                } else if (len < MAX_LEN) {
-                    str[len++] = ch;
-                    write(STDOUT_FILENO, &ch, 1);
-                    if (ch == ' ') last_space = len - 1;
-                } else {
-                    wrap_line(str, &len, &last_space, ch);
+            if (len == MAX_LEN && line[lines][len - 1] != ' ')
+            {
+                char word[MAX_LEN];
+                int idx = 0;
+                while (len > 0 && line[lines][len - 1] != ' ')
+                {
+                    word[idx++] = line[lines][--len];
+                    line[lines][len] = '\0';
                 }
-                break;
+                lines++;
+                for (int i = 0; i < idx; i++)
+                {
+                    line[lines][i] = word[idx - 1 - i];
+                }
+                len = idx;
+            }
+
+            line[lines][len++] = symb;
+            line[lines][len] = '\0';
+
+            write(STDOUT_FILENO, "\r", 1);
+            write(STDOUT_FILENO, line[lines], len);
+            for (int i = len; i < MAX_LEN; i++) write(STDOUT_FILENO, " ", 1);
+        }
+        else
+        {
+            write(STDOUT_FILENO, "\a", 1); // сигнал ошибки
         }
     }
 
-    write(STDOUT_FILENO, "\n", 1);
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_orig);
     return 0;
 }
