@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h> // For fork(), execlp()
-#include <sys/wait.h> // For wait()
+#include <unistd.h>
+#include <sys/wait.h>
 #define SUBPROCESS "echo"
 #define ARGS SUBPROCESS,"-c",NULL
 int main(void){
