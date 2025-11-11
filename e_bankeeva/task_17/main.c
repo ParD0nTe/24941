@@ -18,6 +18,9 @@ int main()
     new_termios.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
 
+    new_termios.c_cc[VMIN] = 1;
+    new_termios.c_cc[VTIME] = 0;
+
     while (1)
     {
         const char symb = (char) getchar();
