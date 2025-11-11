@@ -4,7 +4,7 @@
 // #include <ctype.h>
 // #include <string.h>
 //
-//
+// // print -> write
 // int main()
 // {
 //     char line[40][41] = {0};
@@ -126,267 +126,266 @@
 //     return 0;
 // }
 
-
-#include <unistd.h>
 #include <stdio.h>
-#include <termios.h>
-#include <fcntl.h>
 #include <stdlib.h>
-#include <ctype.h>
-#include <signal.h>
 #include <string.h>
-#include <errno.h>
+#include <unistd.h>
+#include <termios.h>
 
-#define LINE_LEN 40
-#define WORD_BUF_CAP 1024
+#define MAX_LINE_LENGTH 40
+#define MAX_TEXT_LENGTH 2000
+#define BELL '\007'
+#define ERASE 0x7F
+#define KILL 0x15
+#define CTRL_W 0x17
+#define CTRL_D 0x04
 
-static int term_fd = -1;
-static struct termios saved_tio;
+struct termios original_termios;
 
-static void restore_tty(void)
-{
-    if (term_fd >= 0)
-    {
-        tcsetattr(term_fd, TCSAFLUSH, &saved_tio);
+void restore_terminal(void) {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
+}
+
+void setup_terminal(void) {
+    struct termios new_termios;
+    tcgetattr(STDIN_FILENO, &original_termios);
+    atexit(restore_terminal);
+    new_termios = original_termios;
+    new_termios.c_lflag &= ~(ICANON | ECHO);
+    new_termios.c_cc[VMIN] = 1;
+    new_termios.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
+}
+
+struct editor {
+    char text[MAX_TEXT_LENGTH];
+    int pos;
+    int len;
+};
+
+void redraw(struct editor *e) {
+    // Сохраняем позицию курсора, перемещаемся в начало и очищаем строку
+    printf("\033[s\033[1;1H\033[2KInput text (CTRL-D at line start to exit):");
+    // Переходим на вторую строку и очищаем экран от курсора до конца
+    printf("\033[2;1H\033[J");
+
+
+    if (e->len > 0) {
+        int col = 0;
+        int i = 0;
+
+        while (i < e->len) {
+
+            if (e->text[i] == ' ' || e->text[i] == '\t') {
+                if (col >= MAX_LINE_LENGTH) {
+                    printf("\n");
+                    col = 0;
+                }
+                putchar(e->text[i]);
+                col++;
+                i++;
+            }
+            else {
+
+                int word_start = i;
+                int word_end = i;
+                while (word_end < e->len && e->text[word_end] != ' ' && e->text[word_end] != '\t') {
+                    word_end++;
+                }
+
+                int word_length = word_end - word_start;
+
+                if (word_length > MAX_LINE_LENGTH) {
+
+                    int chars_to_print = MAX_LINE_LENGTH - col;
+                    if (chars_to_print <= 0) {
+                        printf("\n");
+                        col = 0;
+                        chars_to_print = MAX_LINE_LENGTH;
+                    }
+
+                    for (int j = 0; j < chars_to_print && i < e->len && e->text[i] != ' ' && e->text[i] != '\t'; j++) {
+                        putchar(e->text[i]);
+                        i++;
+                        col++;
+                    }
+
+                    if (col >= MAX_LINE_LENGTH) {
+                        printf("\n");
+                        col = 0;
+                    }
+                }
+
+                else if (col + word_length > MAX_LINE_LENGTH) {
+                    printf("\n");
+                    col = 0;
+
+
+                    for (int j = word_start; j < word_end; j++) {
+                        putchar(e->text[j]);
+                    }
+                    col += word_length;
+                    i = word_end;
+                }
+
+                else {
+
+                    for (int j = word_start; j < word_end; j++) {
+                        putchar(e->text[j]);
+                    }
+                    col += word_length;
+                    i = word_end;
+                }
+            }
+        }
     }
+
+
+    int line = 2;
+    int col = 0;
+    int i = 0;
+
+
+    while (i < e->pos) {
+        if (e->text[i] == ' ' || e->text[i] == '\t') {
+            if (col >= MAX_LINE_LENGTH) {
+                line++;
+                col = 0;
+            }
+            col++;
+            i++;
+        }
+        else {
+
+            int word_start = i;
+            int word_end = i;
+            while (word_end < e->pos && e->text[word_end] != ' ' && e->text[word_end] != '\t') {
+                word_end++;
+            }
+
+            int word_length = word_end - word_start;
+
+
+            if (word_length > MAX_LINE_LENGTH) {
+                int remaining_in_line = MAX_LINE_LENGTH - col;
+                if (remaining_in_line <= 0) {
+                    line++;
+                    col = 0;
+                    remaining_in_line = MAX_LINE_LENGTH;
+                }
+
+                int chars_to_process = (e->pos - i < remaining_in_line) ? e->pos - i : remaining_in_line;
+                col += chars_to_process;
+                i += chars_to_process;
+
+                if (col >= MAX_LINE_LENGTH) {
+                    line++;
+                    col = 0;
+                }
+            }
+
+            else if (col + word_length > MAX_LINE_LENGTH) {
+                line++;
+                col = word_length;
+                i = word_end;
+            }
+            else {
+                col += word_length;
+                i = word_end;
+            }
+        }
+    }
+
+    printf("\033[%d;%dH", line, col + 1);
+    fflush(stdout);
 }
 
-static void on_signal(int signo)
-{
-    (void)signo;
-    restore_tty();
-    _exit(128 + signo);
-}
 
-static void put_char(int fd, char ch)
-{
-    (void)write(fd, &ch, 1);
-}
-
-static void put_str(int fd, const char *s)
-{
-    (void)write(fd, s, strlen(s));
-}
-
-static void erase_one(int fd, char *line_buf, int *col)
-{
-    if (*col <= 0)
-    {
+void erase_word(struct editor *e) {
+    if (e->pos == 0) {
+        putchar(BELL);
+        fflush(stdout);
         return;
     }
-    put_str(fd, "\b \b");
-    (*col)--;
-    line_buf[*col] = '\0';
+
+    int end = e->pos;
+    while (end > 0 && (e->text[end - 1] == ' ' || e->text[end - 1] == '\t')) end--;
+    while (end > 0 && e->text[end - 1] != ' ' && e->text[end - 1] != '\t') end--;
+
+    int n = e->pos - end;
+    if (n > 0) {
+        memmove(e->text + end, e->text + e->pos, e->len - e->pos + 1);
+        e->len -= n;
+        e->pos = end;
+        redraw(e);
+    }
 }
 
-static void recompute_current_word(const char *line_buf, int col, int *word_start_col, int *word_len)
-{
-    int i = col;
-    while (i > 0 && line_buf[i - 1] == ' ')
-    {
-        i--;
-    }
-    int j = i;
-    while (j > 0 && line_buf[j - 1] != ' ')
-    {
-        j--;
-    }
-    *word_start_col = j;
-    *word_len = i - j;
-}
+int main(void) {
+    struct editor e = { .pos = 0, .len = 0 };
+    char c;
 
-int main(void)
-{
-    term_fd = open("/dev/tty", O_RDWR);
-    if (term_fd < 0)
-    {
-        perror("open /dev/tty");
-        return 1;
-    }
+    setup_terminal();
+    printf("\033[2J\033[HInput text (CTRL-D at line start to exit):\n");
+    fflush(stdout);
 
-    if (tcgetattr(term_fd, &saved_tio) < 0)
-    {
-        perror("tcgetattr");
-        return 1;
-    }
-
-    struct termios raw = saved_tio;
-    raw.c_lflag &= ~(ICANON | ECHO);
-    raw.c_cc[VMIN] = 1;
-    raw.c_cc[VTIME] = 0;
-
-    if (tcsetattr(term_fd, TCSAFLUSH, &raw) < 0)
-    {
-        perror("tcsetattr");
-        return 1;
-    }
-
-    atexit(restore_tty);
-    signal(SIGINT, on_signal);
-    signal(SIGTERM, on_signal);
-
-    unsigned char ch_erase = saved_tio.c_cc[VERASE];
-    unsigned char ch_kill  = saved_tio.c_cc[VKILL];
-    unsigned char ch_eof   = saved_tio.c_cc[VEOF];
-#ifdef VWERASE
-    unsigned char ch_werase = saved_tio.c_cc[VWERASE];
-#else
-    unsigned char ch_werase = 0x17;
-#endif
-
-    char line_buf[LINE_LEN + 1] = {0};
-    int col = 0;
-
-    char word_buf[WORD_BUF_CAP];
-    int word_len = 0;
-    int word_start_col = 0;
-
-    for (;;)
-    {
-        unsigned char ch;
-        ssize_t n = read(term_fd, &ch, 1);
-        if (n <= 0)
-        {
-            if (n < 0 && errno == EINTR)
-            {
-                continue;
-            }
+    while (read(STDIN_FILENO, &c, 1) == 1) {
+        if (c == CTRL_D && e.pos == 0) {
+            printf("\nExit.\n");
             break;
         }
 
-        if (ch == ch_eof)
-        {
-            if (col == 0)
-            {
-                put_str(term_fd, "\r\n");
-                break;
-            }
-            else
-            {
-                put_char(term_fd, '\a');
-                continue;
-            }
-        }
-
-        if (ch == ch_erase)
-        {
-            if (col > 0)
-            {
-                erase_one(term_fd, line_buf, &col);
-                recompute_current_word(line_buf, col, &word_start_col, &word_len);
-            }
-            else
-            {
-                put_char(term_fd, '\a');
+        if (c == ERASE) {
+            if (e.pos > 0) {
+                e.pos--;
+                e.len--;
+                memmove(e.text + e.pos, e.text + e.pos + 1, e.len - e.pos + 1);
+                redraw(&e);
+            } else {
+                putchar(BELL);
+                fflush(stdout);
             }
             continue;
         }
 
-        if (ch == ch_kill)
-        {
-            while (col > 0)
-            {
-                erase_one(term_fd, line_buf, &col);
-            }
-            word_len = 0;
-            word_start_col = 0;
-            continue;
-        }
-
-        if (ch == ch_werase || ch == 0x17)
-        {
-            while (col > 0 && line_buf[col - 1] == ' ')
-            {
-                erase_one(term_fd, line_buf, &col);
-            }
-            while (col > 0 && line_buf[col - 1] != ' ')
-            {
-                erase_one(term_fd, line_buf, &col);
-            }
-            recompute_current_word(line_buf, col, &word_start_col, &word_len);
-            continue;
-        }
-
-        if (isprint(ch))
-        {
-            if (ch == ' ')
-            {
-                if (col == LINE_LEN)
-                {
-                    put_char(term_fd, '\n');
-                    col = 0;
-                    line_buf[0] = '\0';
-                }
-                put_char(term_fd, ch);
-                if (col < LINE_LEN)
-                {
-                    line_buf[col++] = ' ';
-                    line_buf[col] = '\0';
-                }
-                else
-                {
-                    col = 0;
-                    line_buf[0] = '\0';
-                }
-                word_len = 0;
-                word_start_col = col;
-            }
-            else
-            {
-                if (word_len == 0)
-                {
-                    word_start_col = col;
-                }
-
-                put_char(term_fd, ch);
-
-                if (col < LINE_LEN)
-                {
-                    line_buf[col++] = (char)ch;
-                    line_buf[col] = '\0';
-                }
-                else
-                {
-                    col++;
-                }
-
-                if (word_len < WORD_BUF_CAP - 1)
-                {
-                    word_buf[word_len++] = (char)ch;
-                }
-
-                if (col > LINE_LEN)
-                {
-                    for (int i = 0; i < word_len; ++i)
-                    {
-                        erase_one(term_fd, line_buf, &col);
-                    }
-
-                    put_char(term_fd, '\n');
-                    col = 0;
-                    line_buf[0] = '\0';
-
-                    for (int i = 0; i < word_len; ++i)
-                    {
-                        char wc = word_buf[i];
-                        put_char(term_fd, wc);
-                        if (col < LINE_LEN)
-                        {
-                            line_buf[col++] = wc;
-                            line_buf[col] = '\0';
-                        }
-                        else
-                        {
-                            col++;
-                        }
-                    }
-                    word_start_col = 0;
-                }
+        if (c == KILL) {
+            if (e.pos > 0) {
+                memmove(e.text, e.text + e.pos, e.len - e.pos + 1);
+                e.len -= e.pos;
+                e.pos = 0;
+                redraw(&e);
+            } else {
+                putchar(BELL);
+                fflush(stdout);
             }
             continue;
         }
 
-        put_char(term_fd, '\a');
+        if (c == CTRL_W) {
+            erase_word(&e);
+            continue;
+        }
+
+        if (c < 32 || c > 126) {
+            putchar(BELL);
+            fflush(stdout);
+            continue;
+        }
+
+        if (e.len >= MAX_TEXT_LENGTH - 1) {
+            putchar(BELL);
+            fflush(stdout);
+            continue;
+        }
+
+        if (e.pos < e.len) {
+            memmove(e.text + e.pos + 1, e.text + e.pos, e.len - e.pos);
+        }
+        e.text[e.pos] = c;
+        e.pos++;
+        e.len++;
+        e.text[e.len] = '\0';
+        redraw(&e);
     }
 
     return 0;
