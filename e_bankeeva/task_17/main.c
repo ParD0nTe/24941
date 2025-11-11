@@ -1,127 +1,393 @@
-#include <stdio.h>
+// #include <stdio.h>
+// #include <unistd.h>
+// #include <termios.h>
+// #include <ctype.h>
+// #include <string.h>
+//
+//
+// int main()
+// {
+//     char line[40][41] = {0};
+//     int len = 0;
+//     int lines = 0;
+//
+//     struct termios termios;
+//     struct termios new_termios;
+//     tcgetattr(STDIN_FILENO, &termios);
+//     new_termios = termios;
+//     new_termios.c_lflag &= ~(ICANON | ECHO);
+//     tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
+//
+//     new_termios.c_cc[VMIN] = 1;
+//     new_termios.c_cc[VTIME] = 0;
+//
+//     while (1)
+//     {
+//         const char symb = (char) getchar();
+//
+//         if (symb == 127) // ERASE Backspace
+//         {
+//             if (len > 0)
+//             {
+//                 line[lines][len - 1] = '\0';
+//
+//                 printf("\r%-40s", line[lines]);
+//                 fflush(stdout);
+//                 len--;
+//             }
+//             else if (lines > 0)
+//             {
+//                 lines--;
+//                 len = strlen(line[lines]);
+//
+//                 printf("\033[F\r%-40s", line[lines]);
+//                 fflush(stdout);
+//             }
+//         }
+//         else if (symb == 0x15) // KILL CTRL-U
+//         {
+//             for (int i = 0; i < len; i++)
+//             {
+//                 line[lines][i] = ' ';
+//             }
+//             line[lines][0] = '\0';
+//             len = 0;
+//
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
+//         }
+//         else if (symb == 0x17) // CTRL-W
+//         {
+//             while (len > 0 && line[lines][len - 1] == ' ')
+//             {
+//                 len--;
+//                 line[lines][len] = '\0';
+//             }
+//             while (len > 0 && line[lines][len - 1] != ' ')
+//             {
+//                 len--;
+//                 line[lines][len] = '\0';
+//             }
+//
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
+//         }
+//         else if (symb == 0x04) // CTRL-D
+//         {
+//             if (len == 0) break;
+//         }
+//         else if (isprint(symb) || symb == '\n')
+//         {
+//             if (symb == '\n')
+//             {
+//                 lines++;
+//                 len = 0;
+//
+//                 printf("\r%-40s", line[lines]);
+//                 fflush(stdout);
+//
+//                 continue;
+//             }
+//
+//             if (len == 40 && line[lines][len - 1] != ' ')
+//             {
+//                 char word[40];
+//                 int idx = 0;
+//                 while (len > 0 && line[lines][len - 1] != ' ')
+//                 {
+//                     word[idx++] = line[lines][--len];
+//                     line[lines][len] = '\0';
+//                 }
+//
+//                 lines++;
+//                 for (int i = 0; i < idx; i++)
+//                 {
+//                     len = i;
+//                     line[lines][len] = word[idx - 1 - i];
+//                 }
+//
+//                 printf("\r%-40s", line[lines]);
+//             }
+//
+//             line[lines][len++] = symb;
+//             line[lines][len] = '\0';
+//
+//             printf("\r%-40s", line[lines]);
+//             fflush(stdout);
+//         }
+//         else
+//         {
+//             write(1, "\a", 1);
+//         }
+//     }
+//
+//     tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios);
+//
+//     return 0;
+// }
+
+
 #include <unistd.h>
+#include <stdio.h>
 #include <termios.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <ctype.h>
+#include <signal.h>
 #include <string.h>
+#include <errno.h>
 
+#define LINE_LEN 40
+#define WORD_BUF_CAP 1024
 
-int main()
+static int term_fd = -1;
+static struct termios saved_tio;
+
+static void restore_tty(void)
 {
-    char line[40][41] = {0};
-    int len = 0;
-    int lines = 0;
-
-    struct termios termios;
-    struct termios new_termios;
-    tcgetattr(STDIN_FILENO, &termios);
-    new_termios = termios;
-    new_termios.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
-
-    new_termios.c_cc[VMIN] = 1;
-    new_termios.c_cc[VTIME] = 0;
-
-    while (1)
+    if (term_fd >= 0)
     {
-        const char symb = (char) getchar();
+        tcsetattr(term_fd, TCSAFLUSH, &saved_tio);
+    }
+}
 
-        if (symb == 127) // ERASE Backspace
-        {
-            if (len > 0)
-            {
-                line[lines][len - 1] = '\0';
+static void on_signal(int signo)
+{
+    (void)signo;
+    restore_tty();
+    _exit(128 + signo);
+}
 
-                printf("\r%-40s", line[lines]);
-                fflush(stdout);
-                len--;
-            }
-            else if (lines > 0)
-            {
-                lines--;
-                len = strlen(line[lines]);
+static void put_char(int fd, char ch)
+{
+    (void)write(fd, &ch, 1);
+}
 
-                printf("\033[F\r%-40s", line[lines]);
-                fflush(stdout);
-            }
-        }
-        else if (symb == 0x15) // KILL CTRL-U
-        {
-            for (int i = 0; i < len; i++)
-            {
-                line[lines][i] = ' ';
-            }
-            line[lines][0] = '\0';
-            len = 0;
+static void put_str(int fd, const char *s)
+{
+    (void)write(fd, s, strlen(s));
+}
 
-            printf("\r%-40s", line[lines]);
-            fflush(stdout);
-        }
-        else if (symb == 0x17) // CTRL-W
-        {
-            while (len > 0 && line[lines][len - 1] == ' ')
-            {
-                len--;
-                line[lines][len] = '\0';
-            }
-            while (len > 0 && line[lines][len - 1] != ' ')
-            {
-                len--;
-                line[lines][len] = '\0';
-            }
+static void erase_one(int fd, char *line_buf, int *col)
+{
+    if (*col <= 0)
+    {
+        return;
+    }
+    put_str(fd, "\b \b");
+    (*col)--;
+    line_buf[*col] = '\0';
+}
 
-            printf("\r%-40s", line[lines]);
-            fflush(stdout);
-        }
-        else if (symb == 0x04) // CTRL-D
-        {
-            if (len == 0) break;
-        }
-        else if (isprint(symb) || symb == '\n')
-        {
-            if (symb == '\n')
-            {
-                lines++;
-                len = 0;
+static void recompute_current_word(const char *line_buf, int col, int *word_start_col, int *word_len)
+{
+    int i = col;
+    while (i > 0 && line_buf[i - 1] == ' ')
+    {
+        i--;
+    }
+    int j = i;
+    while (j > 0 && line_buf[j - 1] != ' ')
+    {
+        j--;
+    }
+    *word_start_col = j;
+    *word_len = i - j;
+}
 
-                printf("\r%-40s", line[lines]);
-                fflush(stdout);
-
-                continue;
-            }
-
-            if (len == 40 && line[lines][len - 1] != ' ')
-            {
-                char word[40];
-                int idx = 0;
-                while (len > 0 && line[lines][len - 1] != ' ')
-                {
-                    word[idx++] = line[lines][--len];
-                    line[lines][len] = '\0';
-                }
-
-                lines++;
-                for (int i = 0; i < idx; i++)
-                {
-                    len = i;
-                    line[lines][len] = word[idx - 1 - i];
-                }
-
-                printf("\r%-40s", line[lines]);
-            }
-
-            line[lines][len++] = symb;
-            line[lines][len] = '\0';
-
-            printf("\r%-40s", line[lines]);
-            fflush(stdout);
-        }
-        else
-        {
-            write(1, "\a", 1);
-        }
+int main(void)
+{
+    term_fd = open("/dev/tty", O_RDWR);
+    if (term_fd < 0)
+    {
+        perror("open /dev/tty");
+        return 1;
     }
 
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios);
+    if (tcgetattr(term_fd, &saved_tio) < 0)
+    {
+        perror("tcgetattr");
+        return 1;
+    }
+
+    struct termios raw = saved_tio;
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+
+    if (tcsetattr(term_fd, TCSAFLUSH, &raw) < 0)
+    {
+        perror("tcsetattr");
+        return 1;
+    }
+
+    atexit(restore_tty);
+    signal(SIGINT, on_signal);
+    signal(SIGTERM, on_signal);
+
+    unsigned char ch_erase = saved_tio.c_cc[VERASE];
+    unsigned char ch_kill  = saved_tio.c_cc[VKILL];
+    unsigned char ch_eof   = saved_tio.c_cc[VEOF];
+#ifdef VWERASE
+    unsigned char ch_werase = saved_tio.c_cc[VWERASE];
+#else
+    unsigned char ch_werase = 0x17;
+#endif
+
+    char line_buf[LINE_LEN + 1] = {0};
+    int col = 0;
+
+    char word_buf[WORD_BUF_CAP];
+    int word_len = 0;
+    int word_start_col = 0;
+
+    for (;;)
+    {
+        unsigned char ch;
+        ssize_t n = read(term_fd, &ch, 1);
+        if (n <= 0)
+        {
+            if (n < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            break;
+        }
+
+        if (ch == ch_eof)
+        {
+            if (col == 0)
+            {
+                put_str(term_fd, "\r\n");
+                break;
+            }
+            else
+            {
+                put_char(term_fd, '\a');
+                continue;
+            }
+        }
+
+        if (ch == ch_erase)
+        {
+            if (col > 0)
+            {
+                erase_one(term_fd, line_buf, &col);
+                recompute_current_word(line_buf, col, &word_start_col, &word_len);
+            }
+            else
+            {
+                put_char(term_fd, '\a');
+            }
+            continue;
+        }
+
+        if (ch == ch_kill)
+        {
+            while (col > 0)
+            {
+                erase_one(term_fd, line_buf, &col);
+            }
+            word_len = 0;
+            word_start_col = 0;
+            continue;
+        }
+
+        if (ch == ch_werase || ch == 0x17)
+        {
+            while (col > 0 && line_buf[col - 1] == ' ')
+            {
+                erase_one(term_fd, line_buf, &col);
+            }
+            while (col > 0 && line_buf[col - 1] != ' ')
+            {
+                erase_one(term_fd, line_buf, &col);
+            }
+            recompute_current_word(line_buf, col, &word_start_col, &word_len);
+            continue;
+        }
+
+        if (isprint(ch))
+        {
+            if (ch == ' ')
+            {
+                if (col == LINE_LEN)
+                {
+                    put_char(term_fd, '\n');
+                    col = 0;
+                    line_buf[0] = '\0';
+                }
+                put_char(term_fd, ch);
+                if (col < LINE_LEN)
+                {
+                    line_buf[col++] = ' ';
+                    line_buf[col] = '\0';
+                }
+                else
+                {
+                    col = 0;
+                    line_buf[0] = '\0';
+                }
+                word_len = 0;
+                word_start_col = col;
+            }
+            else
+            {
+                if (word_len == 0)
+                {
+                    word_start_col = col;
+                }
+
+                put_char(term_fd, ch);
+
+                if (col < LINE_LEN)
+                {
+                    line_buf[col++] = (char)ch;
+                    line_buf[col] = '\0';
+                }
+                else
+                {
+                    col++;
+                }
+
+                if (word_len < WORD_BUF_CAP - 1)
+                {
+                    word_buf[word_len++] = (char)ch;
+                }
+
+                if (col > LINE_LEN)
+                {
+                    for (int i = 0; i < word_len; ++i)
+                    {
+                        erase_one(term_fd, line_buf, &col);
+                    }
+
+                    put_char(term_fd, '\n');
+                    col = 0;
+                    line_buf[0] = '\0';
+
+                    for (int i = 0; i < word_len; ++i)
+                    {
+                        char wc = word_buf[i];
+                        put_char(term_fd, wc);
+                        if (col < LINE_LEN)
+                        {
+                            line_buf[col++] = wc;
+                            line_buf[col] = '\0';
+                        }
+                        else
+                        {
+                            col++;
+                        }
+                    }
+                    word_start_col = 0;
+                }
+            }
+            continue;
+        }
+
+        put_char(term_fd, '\a');
+    }
 
     return 0;
 }
