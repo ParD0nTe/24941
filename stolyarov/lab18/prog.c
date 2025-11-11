@@ -67,8 +67,9 @@ int process_file(const char* filepath) {
     
     const char* filename = get_filename(filepath);
     
-    if (file_type == '-') {
-        printf("%c%s %3ld %-8s %-8s %8ld %s %s\n",
+    if (file_type == '-')
+    {
+        printf("%c%s %ld %s %s %ld %s %s\n",
                file_type,
                permissions,
                file_stat.st_nlink,
@@ -77,14 +78,14 @@ int process_file(const char* filepath) {
                file_stat.st_size,
                date_str,
                filename);
-    } else {
-        printf("%c%s %3ld %-8s %-8s %8s %s %s\n",
+    } else{
+        printf("%c%s %ld %s %s (%ld) %s %s\n",
                file_type,
                permissions,
                file_stat.st_nlink,
                owner_name,
                group_name,
-               "",
+               file_stat.st_blksize,
                date_str,
                filename);
     }
