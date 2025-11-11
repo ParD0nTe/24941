@@ -1,228 +1,191 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <termios.h>
-#include <signal.h>
-#include <sys/ioctl.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 
-#define MAX_LINE_LENGTH 40
-#define BELL_CHAR '\007'
+void set_terminal_mode(int mod) {
+    struct termios term;
+    
+    tcgetattr(STDIN_FILENO, &term);
+    
+    if (mod) {
+        term.c_lflag |= ICANON;
+        term.c_lflag |= ECHO;
 
-static struct termios original_termios;
-static int terminal_configured = 0;
+    } else {
+        term.c_lflag &= ~ICANON;
+        term.c_lflag &= ~ECHO;
+        term.c_cc[VMIN] = 1; 
+        term.c_cc[VTIME] = 0; 
+    }
+    
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
+}
 
-void restore_terminal(void)
+void add_new_str(char*input, char***arr_str, int *kol_str)
 {
-    if (terminal_configured)
+    if((*kol_str) == 0)
     {
-        tcsetattr(STDIN_FILENO, TCSANOW, &original_termios);
-        terminal_configured = 0;
+        *arr_str = malloc(sizeof(char*));
+        (*arr_str)[0] = input;
+        (*kol_str)++;
+    }
+    else
+    {   
+        (*kol_str)++;
+        *arr_str = realloc(*arr_str, *kol_str * sizeof(char*));
+        (*arr_str)[*kol_str-1] = input;
     }
 }
 
-void signal_handler(int sig)
+int main()
 {
-    restore_terminal();
-    exit(0);
-}
+    struct termios original_term;
 
-int configure_terminal(void)
-{
-    struct termios new_termios;
-    
-    if (tcgetattr(STDIN_FILENO, &original_termios) == -1)
-    {
-        perror("tcgetattr");
-        return -1;
-    }
-    
-    new_termios = original_termios;
-    
-    new_termios.c_lflag &= ~ICANON;
-    new_termios.c_lflag &= ~ECHO;
-    new_termios.c_lflag &= ~ISIG;
-    
-    new_termios.c_cc[VMIN] = 1;
-    new_termios.c_cc[VTIME] = 0;
-    
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &new_termios) == -1)
-    {
-        perror("tcsetattr");
-        return -1;
-    }
-    
-    terminal_configured = 1;
-    return 0;
-}
+    tcgetattr(STDIN_FILENO, &original_term);
 
-int is_printable(char c)
-{
-    return (c >= 32 && c <= 126);
-}
+    set_terminal_mode(0);
 
-int is_space(char c) {
-    return (c == ' ' || c == '\t');
-}
-
-void erase_last_char(char *line, int *pos)
-{
-    if (*pos > 0) {
-        (*pos)--;
-        printf("\b \b");
-        fflush(stdout);
-    }
-}
-
-void kill_line(char *line, int *pos)
-{
-    while (*pos > 0) {
-        erase_last_char(line, pos);
-    }
-}
-
-void erase_last_word(char *line, int *pos)
-{
-    int start_pos = *pos;
-    
-    while (*pos > 0 && is_space(line[*pos - 1]))
-    {
-        (*pos)--;
-    }
-    
-    while (*pos > 0 && !is_space(line[*pos - 1]))
-    {
-        (*pos)--;
-    }
-    
-    int chars_to_erase = start_pos - *pos;
-    for (int i = 0; i < chars_to_erase; i++)
-    {
-        printf("\b \b");
-    }
-    fflush(stdout);
-}
-
-void handle_line_wrap(char *line, int *pos) {
-    if (*pos >= MAX_LINE_LENGTH) {
-        int word_start = *pos;
-        while (word_start > 0 && !is_space(line[word_start - 1]))
-        {
-            word_start--;
-        }
-        
-        if (word_start == 0 || word_start >= MAX_LINE_LENGTH)
-        {
-            printf("\n");
-            fflush(stdout);
-            *pos = 0;
-        } else {
-            printf("\n");
-            fflush(stdout);
-            
-            int word_len = *pos - word_start;
-            memmove(line, line + word_start, word_len);
-            *pos = word_len;
-            
-            for (int i = 0; i < word_len; i++)
-            {
-                printf("%c", line[i]);
-            }
-            fflush(stdout);
-        }
-    }
-}
-
-void process_input(void) {
-    char line[MAX_LINE_LENGTH + 1];
+    char ch;
+    char *input = malloc(1);
+    input[0] = '\0';
     int pos = 0;
-    char c;
-    
-    printf("Program started. Enter text / CTRL+D - exit:\n");
-    fflush(stdout);
-    
-    while (1) {
-        if (read(STDIN_FILENO, &c, 1) <= 0)
+
+    char** arr_str;
+    int kol_str = 0;
+
+    while(1)
+    {
+        read(STDIN_FILENO, &ch, 1);
+        // printf("%d",ch);
+        if(ch == 4 && pos == 0)
         {
+            printf("\nКонец ввода \n");
             break;
         }
-        
-        if (c == 4 && pos == 0)
+        else if(ch == 10)
         {
-            printf("\nProgram terminated.\n");
-            break;
-        }
-        
-        if (c == 4)
-        {
-            continue;
-        }
-        
-        if (c == 127 || c == 8)
-        {
-            erase_last_char(line, &pos);
-            continue;
-        }
-        
-        if (c == 21)
-        {
-            kill_line(line, &pos);
-            continue;
-        }
-        
-        if (c == 23) {
-            erase_last_word(line, &pos);
-            continue;
-        }
-        
-        if (c == '\n' || c == '\r')
-        {
+            pos++;
+            input = realloc(input, pos*sizeof(char));
+            input[pos-1] = '\0';
             printf("\n");
             fflush(stdout);
-            pos = 0;
-            continue;
-        }
-        
-        if (!is_printable(c))
-        {
-            printf("%c", BELL_CHAR);
-            fflush(stdout);
-            continue;
-        }
-        
-        if (pos < MAX_LINE_LENGTH)
-        {
-            line[pos] = c;
-            pos++;
-            
-            printf("%c", c);
-            fflush(stdout);
-            
-            handle_line_wrap(line, &pos);
-        } else {
-            printf("%c", BELL_CHAR);
-            fflush(stdout);
-        }
-    }
-}
 
-int main(void)
-{
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
-    signal(SIGQUIT, signal_handler);
-    
-    atexit(restore_terminal);
-    
-    if (configure_terminal() == -1)
-    {
-        fprintf(stderr, "Ошибка терминала\n");
-        return 1;
+            add_new_str(input, &arr_str, &kol_str);
+
+            pos = 0;
+            input = malloc(1);
+            input[0] = '\0';
+        }
+        else if(ch == 127 || ch == 8)
+        {   
+            if(pos > 0){
+                pos--;
+                input[pos] = '\0';
+                printf("\b \b");
+                fflush(stdout);
+            }
+        }
+        else if(ch == 21)
+        {
+            while(pos>=1)
+            {
+                pos--;
+                printf("\b \b");
+                fflush(stdout);
+                input[pos] = '\0';
+            }
+        }
+        else if(ch == 23)
+        {
+            // printf("ok");
+            while(pos > 0 && isspace(input[pos-1]))
+            {
+                input[pos-1] = '\0';
+                pos--;
+                printf("\b \b");
+                fflush(stdout);
+            }
+
+            while(pos>0 && !isspace(input[pos-1]))
+            {
+                input[pos-1] = '\0';
+                pos--;
+                printf("\b \b");
+                fflush(stdout);
+            }
+
+        }
+        else if (ch >= 32 && ch <= 126) { 
+            if (pos < 40) {
+                pos++;
+                input = realloc(input, pos*sizeof(char));
+                input[pos-1] = ch;
+                
+                printf("%c", ch);
+                fflush(stdout);
+            }
+            else
+            {
+                int i = 0;
+                while(pos-i > 0 && !isspace(input[pos-i-1]))
+                {
+                    i++;
+                }
+
+                if(i == 40)
+                {
+                    for(int j = 0; j < pos; j++)
+                    {
+                        printf("\b \b");
+                    }
+                    fflush(stdout);
+                    printf("\nСлишком длиное слово, строка обнулилась\n");
+                    fflush(stdout);
+                    pos = 0;
+                    free(input);
+                    input = malloc(1);
+                    input[0] = '\0';
+                }
+                else
+                {
+                    char *new_str = malloc((i+1) * sizeof(char));
+                    for(int j = 0; j < i; j++){
+                        new_str[j] = input[pos-i+j];
+                        input[pos-i+j] = '\0';
+                        printf("\b \b");
+                    }
+                    new_str[i] = ch;
+                    add_new_str(input, &arr_str, &kol_str);
+                    input = new_str;
+                    printf("\n");
+                    fflush(stdout);
+                    for(int j = 0; j<i+1; j++)
+                    {
+                        printf("%c",input[j]);
+                    }
+                    fflush(stdout);
+                    pos = i+1;
+                }
+            }
+        }
+        else
+        {
+            set_terminal_mode(1);
+            printf("\a");
+            fflush(stdout);
+            set_terminal_mode(0);
+        }
     }
-    
-    process_input();
-    
-    restore_terminal();
-    
+
+    for (int i = 0; i < kol_str; i++) {
+        free(arr_str[i]);
+    }
+    if(kol_str != 0)free(arr_str);
+    free(input);
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &original_term);
     return 0;
 }
