@@ -28,8 +28,8 @@ int main()
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
 
-    signal(SIGINT, sigevent);
-    signal(SIGQUIT, sigevent);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGQUIT, &sa, NULL);
 
     while (1)
     {
