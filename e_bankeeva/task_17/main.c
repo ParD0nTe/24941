@@ -34,7 +34,8 @@ int main()
                 // printf("\r%-40s", line[lines]);
                 // fflush(stdout);
 
-                write(STDIN_FILENO, line[lines], strlen(line[lines]));
+                write(STDOUT_FILENO, "\r\33[2K", 5);
+                write(STDOUT_FILENO, line[lines], len);
 
                 len--;
             }
@@ -43,7 +44,8 @@ int main()
                 lines--;
                 len = strlen(line[lines]);
 
-                write(STDIN_FILENO, line[lines], strlen(line[lines]));
+                write(STDOUT_FILENO, "\r\33[2K", 5);
+                write(STDOUT_FILENO, line[lines], len);
                 // printf("\033[F\r%-40s", line[lines]);
                 // fflush(stdout);
             }
@@ -57,7 +59,8 @@ int main()
             line[lines][0] = '\0';
             len = 0;
 
-            write(STDIN_FILENO, line[lines], strlen(line[lines]));
+            write(STDOUT_FILENO, "\r\33[2K", 5);
+            write(STDOUT_FILENO, line[lines], len);
         }
         else if (symb == 0x17) // CTRL-W
         {
@@ -72,7 +75,8 @@ int main()
                 line[lines][len] = '\0';
             }
 
-            write(STDIN_FILENO, line[lines], strlen(line[lines]));
+            write(STDOUT_FILENO, line[lines], strlen(line[lines]));
+            write(STDOUT_FILENO, "\a", 1);
         }
         else if (symb == 0x04) // CTRL-D
         {
@@ -85,7 +89,8 @@ int main()
                 lines++;
                 len = 0;
 
-                write(STDIN_FILENO, line[lines], strlen(line[lines]));
+                write(STDOUT_FILENO, line[lines], strlen(line[lines]));
+                write(STDOUT_FILENO, "\a", 1);
 
                 continue;
             }
@@ -113,7 +118,8 @@ int main()
             line[lines][len++] = symb;
             line[lines][len] = '\0';
 
-            write(STDIN_FILENO, line[lines], strlen(line[lines]));
+            write(STDOUT_FILENO, line[lines], strlen(line[lines]));
+            write(STDOUT_FILENO, "\a", 1);
         }
         else
         {
