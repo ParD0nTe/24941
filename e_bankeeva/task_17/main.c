@@ -107,8 +107,6 @@ int main()
                     len = i;
                     line[lines][len] = word[idx - 1 - i];
                 }
-
-                // printf("\r%-40s", line[lines]);
             }
 
             line[lines][len++] = symb;
