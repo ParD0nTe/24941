@@ -16,10 +16,11 @@ int main()
     tcgetattr(STDIN_FILENO, &termios);
     new_termios = termios;
     new_termios.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
 
     new_termios.c_cc[VMIN] = 1;
     new_termios.c_cc[VTIME] = 0;
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &new_termios);
 
     while (1)
     {
@@ -31,11 +32,8 @@ int main()
             {
                 line[lines][len - 1] = '\0';
 
-                // printf("\r%-40s", line[lines]);
-                // fflush(stdout);
-
-                write(STDOUT_FILENO, "\r\33[2K", 5);
-                write(STDOUT_FILENO, line[lines], strlen(line[lines]));
+                printf("\r%-40s", line[lines]);
+                fflush(stdout);
 
                 len--;
             }
@@ -44,10 +42,8 @@ int main()
                 lines--;
                 len = strlen(line[lines]);
 
-                write(STDOUT_FILENO, "\r\33[2K", 5);
-                write(STDOUT_FILENO, line[lines], strlen(line[lines]));
-                // printf("\033[F\r%-40s", line[lines]);
-                // fflush(stdout);
+                printf("\033[F\r%-40s", line[lines]);
+                fflush(stdout);
             }
         }
         else if (symb == 0x15) // KILL CTRL-U
@@ -59,8 +55,8 @@ int main()
             line[lines][0] = '\0';
             len = 0;
 
-            write(STDOUT_FILENO, "\r\33[2K", 5);
-            write(STDOUT_FILENO, line[lines], strlen(line[lines]));
+            printf("\r%-40s", line[lines]);
+            fflush(stdout);
         }
         else if (symb == 0x17) // CTRL-W
         {
@@ -75,9 +71,8 @@ int main()
                 line[lines][len] = '\0';
             }
 
-            write(STDOUT_FILENO, "\r\33[2K", 5);
-            write(STDOUT_FILENO, line[lines], strlen(line[lines]));
-            write(STDOUT_FILENO, "\a", 1);
+            printf("\r%-40s", line[lines]);
+            fflush(stdout);
         }
         else if (symb == 0x04) // CTRL-D
         {
@@ -90,9 +85,8 @@ int main()
                 lines++;
                 len = 0;
 
-                write(STDOUT_FILENO, "\r\33[2K", 5);
-                write(STDOUT_FILENO, line[lines], strlen(line[lines]));
-                write(STDOUT_FILENO, "\a", 1);
+                printf("\r%-40s", line[lines]);
+                fflush(stdout);
 
                 continue;
             }
@@ -120,9 +114,8 @@ int main()
             line[lines][len++] = symb;
             line[lines][len] = '\0';
 
-            write(STDOUT_FILENO, "\r\33[2K", 5);
-            write(STDOUT_FILENO, line[lines], strlen(line[lines]));
-            write(STDOUT_FILENO, "\a", 1);
+            printf("\r%-40s", line[lines]);
+            fflush(stdout);
         }
         else
         {
