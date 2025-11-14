@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 
-int count;
+int count = 0;
 
 void sigevent(const int sig)
 {
@@ -22,7 +22,11 @@ void sigevent(const int sig)
 
 int main()
 {
-    count = 0;
+    struct sigaction sa;
+
+    sa.sa_handler = sigevent;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
 
     signal(SIGINT, sigevent);
     signal(SIGQUIT, sigevent);
