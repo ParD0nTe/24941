@@ -3,9 +3,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
-#include <sys/ttydefaults.h>
 #include <string.h>
 
+
+#define M_CERASE   0x7F  // Backspace (обычно Ctrl+H или Backspace)
+#define M_CKILL    0x15  // Ctrl+U (удалить всю строку)
+#define M_CWERASE  0x17  // Ctrl+W (удалить слово)
+#define M_CEOF     0x04  // Ctrl+D (завершить программу)
 
 #define LINE_LENGTH 40
 struct termios orig_termios;
@@ -33,7 +37,7 @@ int main() {
         int len = strlen(line);
         if (iscntrl(c) || !isprint(c)) {
             switch (c) {
-                case CERASE: {
+                case M_CERASE: {
                     // Когда вводится символ ERASE, стирается
                     // последний символ в текущей строке.
 
@@ -46,7 +50,7 @@ int main() {
                     break;
                 }
 
-                case CKILL: {
+                case M_CKILL: {
                     // Когда вводится символ KILL, стираются
                     // все символы в текущей строке.
 
@@ -58,7 +62,7 @@ int main() {
                     break;
                 }
 
-                case CWERASE: {
+                case M_CWERASE: {
                     // Когда вводится CTRL-W, стирается последнее слово в текущей
                     // строке, вместе со всеми следующими за ним пробелами.
 
@@ -79,7 +83,7 @@ int main() {
                     break;
                 }
 
-                case CEOF: {
+                case M_CEOF: {
                     // Программа завершается, когда введен CTRL-D
                     // и курсор находится в начале строки.
 
