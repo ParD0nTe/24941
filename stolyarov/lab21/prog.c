@@ -1,34 +1,53 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h> 
+#include <unistd.h>
 
-volatile int count = 0;
+volatile sig_atomic_t count = 0;  // Используем volatile sig_atomic_t
 
-void handle_sigint(int sig)
-{
+void handleSIGINT(int sig) 
+{      // Добавляем параметр сигнала
+    write(STDOUT_FILENO, "\a", 1); // Безопасный вывод
     count++;
-    printf("\a");
-    fflush(stdout);
 }
 
-// Обработчик сигнала SIGQUIT (CTRL-\)
-void handle_sigquit(int sig)
-{
-    printf("\nВы вызвали звуковой сигнал %d раз(а).\n", count);
+void handleSIGQUIT(int sig) 
+{     // Добавляем параметр сигнала
+    printf("\nThe signal sounded %d times.\n", count);
     exit(0);
 }
 
-int main()
+int main() 
 {
-    signal(SIGINT, handle_sigint);
-    signal(SIGQUIT, handle_sigquit);
-
-    printf("Программа запущена. Нажмите CTRL-C для звукового сигнала.\n");
-    printf("Нажмите CTRL-\\ для завершения и вывода статистики.\n");
-
-    while (1)
+    // Используем sigaction вместо signal для лучшей переносимости
+    struct sigaction sa_int, sa_quit;
+    
+    sa_int.sa_handler = handleSIGINT;
+    sigemptyset(&sa_int.sa_mask);
+    sa_int.sa_flags = 0;
+    
+    sa_quit.sa_handler = handleSIGQUIT;
+    sigemptyset(&sa_quit.sa_mask);
+    sa_quit.sa_flags = 0;
+    
+    if (sigaction(SIGINT, &sa_int, NULL) == -1) 
     {
-        // Просто ждём сигналов
+        perror("sigaction SIGINT");
+        return 1;
     }
+    
+    if (sigaction(SIGQUIT, &sa_quit, NULL) == -1) 
+    {
+        perror("sigaction SIGQUIT");
+        return 1;
+    }
+    
+    printf("Program started. Press Ctrl+C for beep, Ctrl+\\ to quit.\n");
+    
+    while (1) 
+    {
+        pause();  
+    }
+    
     return 0;
 }
