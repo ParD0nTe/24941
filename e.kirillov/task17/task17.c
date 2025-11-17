@@ -24,6 +24,8 @@ void enableRawMode() {
 
     struct termios raw = orig_termios;
     raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_cc[VMIN] = 1; // Ж�дать минимум 1 символ
+    raw.c_cc[VTIME] = 0; // �,tp nfqvfenf
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
