@@ -13,7 +13,7 @@ void handleSIGINT(int sig)
 
 void handleSIGQUIT(int sig) 
 {     // Добавляем параметр сигнала
-    printf("\nThe signal sounded %d times.\n", count);
+    printf("\nSounded %d times.\n", count);
     exit(0);
 }
 
@@ -42,7 +42,7 @@ int main()
         return 1;
     }
     
-    printf("Program started. Press Ctrl+C for beep, Ctrl+\\ to quit.\n");
+    printf("Press Ctrl+C for sound, Ctrl+\\ to quit.\n");
     
     while (1) 
     {
