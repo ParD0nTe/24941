@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99
-TARGET = cataloger
-SOURCE = cataloger.c
+TARGET = prog
+SOURCE = prog.c
 
 all: $(TARGET)
 
