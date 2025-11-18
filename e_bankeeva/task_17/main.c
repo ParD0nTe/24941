@@ -42,7 +42,7 @@ int main()
                 lines--;
                 len = strlen(line[lines]);
 
-                printf("\033[F\r%-40s", line[lines]);
+                printf("\r%-40s\n", line[lines]);
                 fflush(stdout);
             }
         }
