@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
-
+#include <termios.h>
 volatile sig_atomic_t beep_count = 0;
 
 void sigint_handler() {
@@ -17,6 +17,10 @@ void sigquit_handler() {
 }
 
 int main() {
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         perror("signal");
         exit(1);
