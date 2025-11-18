@@ -19,7 +19,7 @@ void sigquit_handler() {
 int main() {
     struct termios term;
     tcgetattr(STDIN_FILENO, &term);
-    term.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
+    term.c_lflag &= ~(ICANON|ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         perror("signal");
