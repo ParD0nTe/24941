@@ -32,7 +32,7 @@ int main()
             {
                 line[lines][len - 1] = '\0';
 
-                printf("\r%-40s", line[lines]);
+                printf("\33[2K\r%s", line[lines]);
                 fflush(stdout);
 
                 len--;
@@ -42,7 +42,7 @@ int main()
                 lines--;
                 len = strlen(line[lines]);
 
-                printf("\r%-40s\n", line[lines]);
+                printf("\33[2K\r%s\n", line[lines]);
                 fflush(stdout);
             }
         }
@@ -55,7 +55,7 @@ int main()
             line[lines][0] = '\0';
             len = 0;
 
-            printf("\r%-40s", line[lines]);
+            printf("\33[2K\r%s", line[lines]);
             fflush(stdout);
         }
         else if (symb == 0x17) // CTRL-W
@@ -71,7 +71,7 @@ int main()
                 line[lines][len] = '\0';
             }
 
-            printf("\r%-40s", line[lines]);
+            printf("\33[2K\r%s", line[lines]);
             fflush(stdout);
         }
         else if (symb == 0x04) // CTRL-D
@@ -91,9 +91,9 @@ int main()
                 continue;
             }
 
-            if (len == 39 && line[lines][len - 1] != ' ')
+            if (len == 40)
             {
-                char word[40];
+                char word[41];
                 int idx = 0;
                 while (len > 0 && line[lines][len - 1] != ' ')
                 {
@@ -102,17 +102,20 @@ int main()
                 }
 
                 lines++;
-                for (int i = 0; i < idx; i++)
+                len = 0;
+                for (int i = idx - 1; i >= 0; i--)
                 {
-                    len = i;
-                    line[lines][len] = word[idx - 1 - i];
+                    line[lines][len++] = word[i];
                 }
+                line[lines][len] = '\0';
+
+                printf("\n");
             }
 
             line[lines][len++] = symb;
             line[lines][len] = '\0';
 
-            printf("\r%-40s", line[lines]);
+            printf("\33[2K\r%s", line[lines]);
             fflush(stdout);
         }
         else
