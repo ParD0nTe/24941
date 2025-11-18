@@ -91,7 +91,7 @@ int main()
                 continue;
             }
 
-            if (len == 40 && line[lines][len - 1] != ' ')
+            if (len == 39 && line[lines][len - 1] != ' ')
             {
                 char word[40];
                 int idx = 0;
