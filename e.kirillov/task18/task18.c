@@ -71,18 +71,10 @@ void print_file_info(const char *filename) {
         basename = filename;
     
     // Форматированный вывод
-    if (S_ISREG(st.st_mode))
-        // Для обычных файлов выводим размер
-        printf("%c%s %2ld %-8s %-8s %8ld %s %s\n",
-               file_type, permissions, st.st_nlink,
-               owner_name, group_name, (long)st.st_size,
-               time_buf, basename);
-    else
-        // Для необычных файлов не выводим размер
-        printf("%c%s %2ld %-8s %-8s %8s %s %s\n",
-               file_type, permissions, st.st_nlink,
-               owner_name, group_name, "",
-               time_buf, basename);
+    printf("%c%s %2ld %-8s %-8s %8ld %s %s\n",
+            file_type, permissions, st.st_nlink,
+            owner_name, group_name, (long)st.st_size,
+            time_buf, basename);
 }
 
 int main(int argc, char *argv[]) {
