@@ -63,7 +63,7 @@ int main() {
     printf("CTRL+W - Стирает последнее слово\n");
     printf("CTRL+A - Стирает все строки\n");
     printf("CTRL+D - Завершение (если в начале)\n");
-    printf("Максимальная длина строки: 40 символов\n");
+    printf("Максимальная длина строки и слова: 40 символов\n");
     printf("Ввод:\n");
 
     char ch;
@@ -189,9 +189,58 @@ int main() {
                 write(1, &ch, 1);
 
                 if (cursor_pos % LINE_LIMIT == 0) {
+                    int in_spaces = 0;
+                    int word_idx = 0;
+                    char word[40];
+                    cursor_pos--;
+                    while (cursor_pos > 0) {
+                        word[word_idx++] = input_buffer[cursor_pos--];
+                        
+                        if (word_idx == 39){
+                            return 1;
+                        }
+
+                        if (isspace(input_buffer[cursor_pos])) {
+                            if (in_spaces == 0)
+                                in_spaces = 1;
+                        } else {
+                            if (in_spaces == 1) {
+                                cursor_pos++;
+                                break;
+                            }
+                        }
+
+                        if (cursor_pos % LINE_LIMIT == LINE_LIMIT - 1
+                            && current_line > 0) {
+
+                            current_line--;
+                            write(1, CUR_UP, 3);
+                            write(1, "\r", 1);
+
+                            for (int i = 0; i < LINE_LIMIT; i++)
+                                write(1, CUR_RIGHT, 3);
+
+                            write(1, ERASE_OUT, 3);
+                        }
+                        else {
+                            write(1, ERASE_OUT, 3);
+                        }
+                    }
+                    
+                    while (cursor_pos % LINE_LIMIT != 0){
+                        input_buffer[cursor_pos++] = " ";
+                        write(1, " ", 1);
+                    }
+
                     write(1, "\n", 1);
                     current_line++;
+                    for (int i = word_idx - 1; i >= 0; i--){
+                        ch = word[i];
+                        input_buffer[cursor_pos++] = ch;
+                        write(1, &ch, 1);
+                    }
                 }
+
             }
             else {
                 write(1, SOUND, 1);
@@ -206,3 +255,4 @@ int main() {
 
     return 0;
 }
+
