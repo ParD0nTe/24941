@@ -95,11 +95,15 @@ int main()
             {
                 char word[41];
                 int idx = 0;
+
                 while (len > 0 && line[lines][len - 1] != ' ')
                 {
                     word[idx++] = line[lines][--len];
                     line[lines][len] = '\0';
                 }
+
+                printf("\33[2K\r%s", line[lines]);
+                fflush(stdout);
 
                 lines++;
                 len = 0;
