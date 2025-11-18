@@ -5,7 +5,6 @@
 #include <ctype.h>
 #include <string.h>
 
-
 #define M_CERASE   0x7F  // Backspace (обычно Ctrl+H или Backspace)
 #define M_CKILL    0x15  // Ctrl+U (удалить всю строку)
 #define M_CWERASE  0x17  // Ctrl+W (удалить слово)
@@ -24,8 +23,8 @@ void enableRawMode() {
 
     struct termios raw = orig_termios;
     raw.c_lflag &= ~(ECHO | ICANON);
-    raw.c_cc[VMIN] = 1; // Ж�дать минимум 1 символ
-    raw.c_cc[VTIME] = 0; // �,tp nfqvfenf
+    raw.c_cc[VMIN] = 1;  // Ждать минимум 1 символ
+    raw.c_cc[VTIME] = 0; // без таймаута
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
@@ -113,6 +112,36 @@ int main() {
             line[len] = 0;
 
             putchar(c);
+            
+            // Проверка, если слово пересекает 40-й столбец
+            if (len == LINE_LENGTH && c != ' ') {
+                // Ищем начало текущего слова
+                int word_start = len - 1;
+                while (word_start >= 0 && line[word_start] != ' ') {
+                    word_start--;
+                }
+                word_start++; // Переходим к первому символу слова
+                
+                // Если слово начинается до 40-го столбца
+                if (word_start < LINE_LENGTH) {
+                    printf("\33[%dD\33[K", len - word_start);
+                    // Переносим слово на новую строку
+                    printf("\n");
+                    
+                    // Копируем слово в начало строки
+                    int word_len = len - word_start;
+                    memmove(line, line + word_start, word_len);
+                    line[word_len] = 0;
+                    
+                    // Выводим перенесенное слово
+                    for (int i = 0; i < word_len; i++) {
+                        putchar(line[i]);
+                    }
+                    
+                    // Обновляем длину
+                    len = word_len;
+                }
+            }
         }
         fflush(NULL);
     }
