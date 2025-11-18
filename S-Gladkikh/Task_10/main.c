@@ -2,14 +2,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#define SUBPROCESS "echo"
-#define ARGS SUBPROCESS,"-c",NULL
-int main(void){
+int main(int argc,char **argv){
+    if(argc==1){
+        return 0;
+    }
     pid_t cpid;
     printf("Forking...\n");
     cpid = fork();
     if(cpid==0){
-        execlp(SUBPROCESS,ARGS);
+        execvp(argv[1],&argv[1]);
         exit(0);
     }
     int stat_lock;

@@ -25,10 +25,8 @@ int main() {
         exit(EXIT_SUCCESS);
     } else {
         close(pipefd[0]);
-        
         char *message = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do ";
         write(pipefd[1], message, strlen(message) + 1);
-        
         close(pipefd[1]);
         wait(NULL);
     }
