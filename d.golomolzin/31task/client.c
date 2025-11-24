@@ -3,25 +3,32 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+
+
 
 
 // низкая функция записи в дескриптор
 void write_ (int fd) {
     
-    char* text = "hello, world and my friend!\n";
-    printf("\nЗаписываемый клиентом текст:\n[origin_text]: %s", text);
+    char* texts[10] = {
+        "first", "second", "third", "fourth", "fifth",
+        "sixth", "seventh", "eighth", "ninth", "tenth"
+    };
+
+    char* text = texts[ rand() % 10 ];
+    // printf("\nЗаписываемый клиентом текст:\n[origin_text]: %s", text);
     printf("\n");
     write(fd, text, strlen(text));
 };
 
-
 int main () {
     
-    printf("┌────────────────────────────────────────┐\n");
-    printf("│                 КЛИЕНТ                 │\n");
-    printf("└────────────────────────────────────────┘");
+    // printf("┌────────────────────────────────────────┐\n");
+    // printf("│                 КЛИЕНТ                 │\n");
+    // printf("└────────────────────────────────────────┘");
 
     // создаем сокет для локального взаимодействия
     int fd = socket(PF_LOCAL, SOCK_STREAM, 0);
@@ -30,6 +37,8 @@ int main () {
         return 1;
     }
     
+    // const char* path_socket = "/mnt/d/Desktop/VSCODE/24941/d.golomolzin/30task/socket";
+    // const char* path_socket = "/tmp/socket.sock";
     const char* path_socket = "/home/students/24200/d.golomolzin/24941/d.golomolzin/30task/socket";
 
     // структура для адреса Unix socket
