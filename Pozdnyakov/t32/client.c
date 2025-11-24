@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define SOCKET_PATH "/tmp/socket"
+#define SOCKET_PATH "./socket"
 #define BUF 1024
 
 int main(){

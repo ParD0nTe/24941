@@ -9,7 +9,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define SOCKET_PATH  "/tmp/socket"
+#define SOCKET_PATH  "./socket"
 #define BUF 1024
 #define MAX 5
 
