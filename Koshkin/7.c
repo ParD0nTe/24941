@@ -6,11 +6,12 @@
 #include <sys/stat.h>
 #include <sys/select.h>
 
-// Структура для строки
-typedef struct {
+// Узел связного списка
+typedef struct LineNode {
     off_t offset;
     size_t length;
-} LineInfo;
+    struct LineNode *next;
+} LineNode;
 
 // Вывод всего файла
 void print_whole_file(const char *mapped, off_t file_size) {
@@ -27,57 +28,56 @@ int main() {
 
     struct stat sb;
     fstat(fd, &sb);
-
     off_t file_size = sb.st_size;
 
     char *mapped = mmap(NULL, (size_t)file_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
-    // === Строим таблицу строк ===
-    size_t capacity = 16;  // начальная ёмкость
+
+    // === Строим таблицу строк через связный список ===
+    LineNode *head = NULL;
+    LineNode *tail = NULL;
+    LineNode *current_node = NULL;
     size_t line_count = 0;
-    LineInfo *lines = malloc(capacity * sizeof(LineInfo));
 
     off_t pos = 0, line_start = 0;
     while (pos < file_size) {
-        if (mapped[pos] == '\n') {
-            if (line_count >= capacity) {
-                capacity *= 2;
-                LineInfo *temp = realloc(lines, capacity * sizeof(LineInfo));
-                lines = temp;
+        if (current_node == NULL) {
+            // Начало новой строки
+            current_node = malloc(sizeof(LineNode));
+            current_node->offset = line_start;
+            current_node->length = 0;
+            current_node->next = NULL;
+            
+            // Добавляем в список
+            if (head == NULL) {
+                head = current_node;
+                tail = current_node;
+            } else {
+                tail->next = current_node;
+                tail = current_node;
             }
-            lines[line_count].offset = line_start;
-            lines[line_count].length = (size_t)(pos - line_start + 1);
             line_count++;
+        }
+
+        current_node->length++;
+        
+        if (mapped[pos] == '\n') {
+            // Завершаем текущую строку
+            current_node = NULL;
             line_start = pos + 1;
         }
         pos++;
     }
 
-    // Последняя строка без \n
-    if (line_start < file_size) {
-        if (line_count >= capacity) {
-            capacity *= 2;
-            LineInfo *temp = realloc(lines, capacity * sizeof(LineInfo));
-            lines = temp;
-        }
-        lines[line_count].offset = line_start;
-        lines[line_count].length = (size_t)(file_size - line_start);
-        line_count++;
-    }
-
     // === Отладка: таблица ===
     printf("Таблица отступов и длин строк:\n");
-    for (size_t i = 0; i < line_count; i++) {
+    LineNode *temp = head;
+    size_t i = 1;
+    while (temp != NULL) {
         printf("Строка %zu: отступ = %ld, длина = %zu\n",
-               i + 1, lines[i].offset, lines[i].length);
-    }
-
-    if (line_count == 0) {
-        printf("Ошибка: файл не содержит строк.\n");
-        free(lines);
-        munmap(mapped, file_size);
-        close(fd);
-        return EXIT_FAILURE;
+               i, temp->offset, temp->length);
+        temp = temp->next;
+        i++;
     }
 
     // === Интерактивный ввод с таймаутом ===
@@ -107,9 +107,14 @@ int main() {
             continue;
         }
 
-        size_t idx = (size_t)line_number - 1;
-        const char *line_ptr = mapped + lines[idx].offset;
-        size_t len = lines[idx].length;
+        // Находим нужную строку в списке
+        temp = head;
+        for (int j = 1; j < line_number; j++) {
+            temp = temp->next;
+        }
+
+        const char *line_ptr = mapped + temp->offset;
+        size_t len = temp->length;
 
         // Убираем \n в конце, если есть
         size_t print_len = len;
@@ -120,8 +125,14 @@ int main() {
         printf("Строка %d: %.*s\n", line_number, (int)print_len, line_ptr);
     }
 
-    // === Освобождение ===
-    free(lines);
+    // === Освобождение памяти ===
+    temp = head;
+    while (temp != NULL) {
+        LineNode *to_free = temp;
+        temp = temp->next;
+        free(to_free);
+    }
+    
     munmap(mapped, file_size);
     return 0;
 }

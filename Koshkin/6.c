@@ -6,21 +6,21 @@
 #include <sys/select.h>
 #include <time.h>
 
-// Структура для хранения информации о строке
-typedef struct {
-    off_t offset; // Отступ (позиция начала строки в файле)
-    size_t length; // Длина строки (включая \n)
-} LineInfo;
+// Узел связного списка для хранения информации о строке
+typedef struct LineNode {
+    off_t offset;           // Отступ (позиция начала строки в файле)
+    size_t length;          // Длина строки
+    struct LineNode *next;  // Указатель на следующий узел
+} LineNode;
 
 // Функция для вывода всего содержимого файла
 void print_whole_file(int fd) {
     char buffer[1024];
     ssize_t bytes_read;
 
-    // Перемещаемся в начало файла
     lseek(fd, 0, SEEK_SET);
-
-    // Читаем и выводим файл
+    printf("\nВремя вышло! Выводим содержимое файла:\n");
+    
     while ((bytes_read = read(fd, buffer, sizeof(buffer) - 1)) > 0) {
         buffer[bytes_read] = '\0';
         printf("%s", buffer);
@@ -29,86 +29,90 @@ void print_whole_file(int fd) {
 
 int main() {
     int fd;
-    char buffer[1]; // Буфер для посимвольного чтения
+    char buffer[1];
     ssize_t bytes_read;
+    
+    // Инициализация связного списка
+    LineNode *head = NULL;
+    LineNode *tail = NULL;
+    LineNode *current_node = NULL;
+    
+    size_t line_count = 0;
     off_t current_offset = 0;
-    size_t current_length = 0;
-    LineInfo *lines = NULL; // Динамический массив для таблицы
-    size_t line_count = 0; // Количество строк
-    size_t capacity = 10; // Начальная емкость массива
 
     // Открываем файл
     fd = open("secret.txt", O_RDONLY);
-
-    // Выделяем начальную память для таблицы строк
-    lines = (LineInfo *)malloc(capacity * sizeof(LineInfo));
-
-    // Фиксируем отступ первой строки
-    lines[line_count].offset = 0;
-
-    // Читаем файл посимвольно и строим таблицу
-    while ((bytes_read = read(fd, buffer, 1)) > 0) {
-        current_length++;
-        if (buffer[0] == '\n') {
-            // Завершаем текущую строку
-            lines[line_count].length = current_length;
-            line_count++;
-            current_length = 0;
-
-            // Проверяем, нужно ли увеличить массив
-            if (line_count >= capacity) {
-                capacity *= 2;
-                LineInfo *temp = (LineInfo *)realloc(lines, capacity * sizeof(LineInfo));
-                lines = temp;
-            }
-
-            // Фиксируем отступ следующей строки
-            lines[line_count].offset = lseek(fd, 0L, SEEK_CUR);
-        }
+    if (fd == -1) {
+        perror("Ошибка открытия файла");
+        return 1;
     }
 
-    // Если последняя строка не заканчивается \n, учитываем ее
-    if (current_length > 0) {
-        lines[line_count].length = current_length;
-        line_count++;
+    // Запоминаем начальную позицию
+    current_offset = lseek(fd, 0L, SEEK_CUR);
+
+    // Читаем файл посимвольно и строим связный список
+    while ((bytes_read = read(fd, buffer, 1)) > 0) {
+        if (current_node == NULL) {
+            // Начало новой строки - создаем новый узел
+            current_node = (LineNode *)malloc(sizeof(LineNode));
+            if (!current_node) {
+                perror("Ошибка выделения памяти");
+                close(fd);
+                return 1;
+            }
+            current_node->offset = current_offset;
+            current_node->length = 0;
+            current_node->next = NULL;
+            
+            // Добавляем узел в список
+            if (head == NULL) {
+                head = current_node;
+                tail = current_node;
+            } else {
+                tail->next = current_node;
+                tail = current_node;
+            }
+            line_count++;
+        }
+
+        current_node->length++;
+        
+        if (buffer[0] == '\n') {
+            // Завершаем текущую строку
+            current_node = NULL;
+            current_offset = lseek(fd, 0L, SEEK_CUR);
+        }
     }
 
     // Выводим таблицу для отладки
     printf("Таблица отступов и длин строк:\n");
-    for (size_t i = 0; i < line_count; i++) {
-        printf("Строка %zu: отступ = %ld, длина = %zu\n", i + 1, lines[i].offset, lines[i].length);
-    }
-
-    // Проверяем, есть ли строки в файле
-    if (line_count == 0) {
-        printf("Ошибка: файл пустой или не содержит строк.\n");
-        free(lines);
-        close(fd);
-        return 1;
+    LineNode *temp = head;
+    size_t i = 1;
+    while (temp != NULL) {
+        printf("Строка %zu: отступ = %ld, длина = %zu\n", i, temp->offset, temp->length);
+        temp = temp->next;
+        i++;
     }
 
     // Запрашиваем номер строки с таймаутом
     int line_number;
     while (1) {
         printf("Введите номер строки (0 для выхода, 5 секунд на ввод): ");
-        fflush(stdout); // Сбрасываем буфер вывода
+        fflush(stdout);
 
         // Настраиваем таймаут с помощью select
         fd_set read_fds;
         struct timeval timeout;
         FD_ZERO(&read_fds);
         FD_SET(STDIN_FILENO, &read_fds);
-        timeout.tv_sec = 5; // 5 секунд
+        timeout.tv_sec = 5;
         timeout.tv_usec = 0;
 
         int ready = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
         if (ready == 0) {
-            // Таймаут: ввод не был осуществлен в течение 5 секунд
-            printf("\nВремя вышло! Выводим содержимое файла:\n");
+            // Таймаут
             print_whole_file(fd);
-            free(lines);
-            close(fd);
-            return 0;
+            break;
         }
 
         // Ввод доступен, читаем номер строки
@@ -116,7 +120,7 @@ int main() {
         while (getchar() != '\n'); // Очищаем остаток строки
 
         if (line_number == 0) {
-            break; // Выход при вводе 0
+            break;
         }
 
         if (line_number < 1 || line_number > (int)line_count) {
@@ -124,36 +128,42 @@ int main() {
             continue;
         }
 
-        // Перемещаемся на начало строки
-        off_t offset = lines[line_number - 1].offset;
-        size_t length = lines[line_number - 1].length;
+        // Находим нужный узел в списке
+        temp = head;
+        for (int j = 1; j < line_number; j++) {
+            temp = temp->next;
+        }
 
-        if (lseek(fd, offset, SEEK_SET) == -1) {
+        // Перемещаемся на начало строки и читаем ее
+        if (lseek(fd, temp->offset, SEEK_SET) == -1) {
             perror("Ошибка позиционирования");
             continue;
         }
 
-        // Читаем строку
-        char *line_buffer = (char *)malloc(length + 1); // +1 для \0
+        char *line_buffer = (char *)malloc(temp->length + 1);
         if (!line_buffer) {
             perror("Ошибка выделения памяти");
             continue;
         }
 
-        bytes_read = read(fd, line_buffer, length);
-        if (bytes_read != (ssize_t)length) {
-            printf("Отладка: прочитано %zd байт, ожидалось %zu\n", bytes_read, length);
-            free(line_buffer);
-            continue;
+        bytes_read = read(fd, line_buffer, temp->length);
+        if (bytes_read != (ssize_t)temp->length) {
+            printf("Отладка: прочитано %zd байт, ожидалось %zu\n", bytes_read, temp->length);
         }
 
-        line_buffer[length] = '\0'; // Добавляем завершающий нуль для printf
+        line_buffer[temp->length] = '\0';
         printf("Строка %d: %s", line_number, line_buffer);
         free(line_buffer);
     }
 
-    // Освобождаем ресурсы
-    free(lines);
+    // Освобождаем память (очищаем связный список)
+    temp = head;
+    while (temp != NULL) {
+        LineNode *to_free = temp;
+        temp = temp->next;
+        free(to_free);
+    }
+
     close(fd);
     return 0;
 }
