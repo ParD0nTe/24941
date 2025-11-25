@@ -6,13 +6,19 @@
 #include <sys/un.h>
 #include <ctype.h>
 #include <poll.h>
+#include <time.h>
 
 #define SOCKET_PATH  "./socket"
 #define BUF 1024
 #define MAX 5
 
-int main(){
+void get_current_time(char *time_buf, size_t buf_size) {
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(time_buf, buf_size, "%Y-%m-%d %H:%M:%S", tm_info);
+}
 
+int main() {
     int server_fd, client_fd;
     struct sockaddr_un socket_addr;
     char buffer[BUF];
@@ -20,6 +26,8 @@ int main(){
     int count_ds = 1;
 
     struct pollfd fds[MAX + 1];
+    
+    char connection_time[MAX + 1][64];
 
     server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -30,18 +38,18 @@ int main(){
     unlink(SOCKET_PATH);
 
     bind(server_fd, (struct sockaddr*)&socket_addr, sizeof(socket_addr));
-
     listen(server_fd, 5);
 
     printf("Сервер запущен\n");
 
     memset(fds, 0, sizeof(fds));
+    memset(connection_time, 0, sizeof(connection_time));
 
     fds[0].fd = server_fd;
     fds[0].events = POLLIN;
 
     while (1) {
-        int ready = poll(fds, count_ds, -1);
+        int ready = poll(fds, count_ds, 100);
 
         for (int i = 0; i < count_ds; i++) {
             if (fds[i].revents == 0) {
@@ -50,21 +58,29 @@ int main(){
 
             if (fds[i].fd == server_fd) {
                 if (fds[i].revents & POLLIN) {
-
                     client_fd = accept(server_fd, NULL, NULL);
 
                     if (count_ds < MAX + 1) {
                         fds[count_ds].fd = client_fd;
                         fds[count_ds].events = POLLIN;
+                    
+                        get_current_time(connection_time[count_ds], sizeof(connection_time[count_ds]));
+                        
+                        char current_time[64];
+                        get_current_time(current_time, sizeof(current_time));
+                        
+                        printf("[%s] Клиент подключен: fd=%d, всего клиентов: %d\n", 
+                               current_time, client_fd, count_ds);
+                        
                         count_ds++;
-                        printf("Кто-то подключен\n");
                     } else {
-                        printf("Достигнут лимит\n");
+                        char current_time[64];
+                        get_current_time(current_time, sizeof(current_time));
+                        printf("[%s] Достигнут лимит подключений, отказ клиенту\n", current_time);
                         close(client_fd);
                     }
                 }
             } 
-
             else if (fds[i].revents & POLLIN) {
                 bytes = read(fds[i].fd, buffer, BUF - 1);
                 
@@ -75,13 +91,37 @@ int main(){
                         buffer[j] = toupper(buffer[j]);
                     }
                     
-                    printf("клиент номер: %d - %s",fds[i].fd ,buffer);
+                    char current_time[64];
+                    get_current_time(current_time, sizeof(current_time));
+                    
+                    printf("Клиент fd=%d : %s\n", fds[i].fd, buffer);
                     fflush(stdout);
                 } 
                 else if (bytes == 0) {
-                    printf("Кто-то отключился\n");
+                    char current_time[64];
+                    get_current_time(current_time, sizeof(current_time));
+                    
+                    time_t connect_time_t, disconnect_time_t;
+                    time(&disconnect_time_t);
+    
+                    struct tm tm_connect;
+                    memset(&tm_connect, 0, sizeof(tm_connect));
+                    sscanf(connection_time[i], "%d-%d-%d %d:%d:%d", 
+                           &tm_connect.tm_year, &tm_connect.tm_mon, &tm_connect.tm_mday,
+                           &tm_connect.tm_hour, &tm_connect.tm_min, &tm_connect.tm_sec);
+                    tm_connect.tm_year -= 1900;
+                    tm_connect.tm_mon -= 1;
+                    connect_time_t = mktime(&tm_connect);
+                    
+                    int connection_duration = (int)difftime(disconnect_time_t, connect_time_t);
+                    
+                    printf("[%s] Клиент отключился: fd=%d, время соединения: %d секунд, подключен был: %s\n", 
+                           current_time, fds[i].fd, connection_duration, connection_time[i]);
+                    
                     close(fds[i].fd);
                     fds[i].fd = -1;
+                    
+                    memset(connection_time[i], 0, sizeof(connection_time[i]));
                 } 
             }
         }
@@ -90,6 +130,7 @@ int main(){
             if (fds[i].fd == -1) {
                 for (int j = i; j < count_ds - 1; j++) {
                     fds[j] = fds[j + 1];
+                    strncpy(connection_time[j], connection_time[j + 1], sizeof(connection_time[j]));
                 }
                 i--; 
                 count_ds--;
@@ -103,8 +144,6 @@ int main(){
         }
     }
 
-
     unlink(SOCKET_PATH);
-
     return 0;
 }

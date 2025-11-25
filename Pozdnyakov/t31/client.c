@@ -12,9 +12,9 @@ int main(){
 
     int client_fd;
     struct sockaddr_un socket_addr;
-    char buffer[BUF];
-    ssize_t bytes;
-
+    char buffer[BUF] = "aaaaaaaaaaaaaaaaaaaaaaaaa";
+    ssize_t bytes = strlen(buffer);
+    buffer[bytes] = '\0';
 
     client_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -24,8 +24,14 @@ int main(){
 
     connect(client_fd, (struct sockaddr*)&socket_addr, sizeof(socket_addr));
 
-    while((bytes = read(STDIN_FILENO, buffer, BUF)) > 0){
+    int count = 0;
+
+    sleep(2);
+
+    while(count < 60){
         write(client_fd, buffer, bytes);
+        count++;
+        usleep(100000);
     }
 
     close(client_fd);
