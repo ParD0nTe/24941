@@ -23,6 +23,7 @@ int main() {
 
     if (connect(client_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("connect");
+        close(client_sock);
         return 1;
     }
 
@@ -42,7 +43,10 @@ int main() {
         if (strcmp(buffer, "q") == 0)
             break;
 
-        send(client_sock, buffer, strlen(buffer), 0);
+        if (send(client_sock, buffer, strlen(buffer), 0) < 0) {
+            perror("send");
+            break;
+        }
     }
 
     close(client_sock);
