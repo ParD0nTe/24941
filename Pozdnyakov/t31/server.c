@@ -33,6 +33,8 @@ int main(){
 
     listen(server_fd, 5);
 
+    printf("Сервер запущен\n");
+
     memset(fds, 0, sizeof(fds));
 
     fds[0].fd = server_fd;
