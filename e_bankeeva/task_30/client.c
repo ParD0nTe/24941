@@ -31,7 +31,7 @@ int main() {
     char buffer[256];
 
     while (1) {
-        printf("client: ");
+        printf("enter text: ");
         fflush(stdout);
 
         if (!fgets(buffer, sizeof(buffer), stdin))
