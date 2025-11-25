@@ -75,7 +75,7 @@ int main(){
                         buffer[j] = toupper(buffer[j]);
                     }
                     
-                    printf("%s", buffer);
+                    printf("клиент номер: %d - %s",fds[i].fd ,buffer);
                     fflush(stdout);
                 } 
                 else if (bytes == 0) {
