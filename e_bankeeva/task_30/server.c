@@ -8,7 +8,7 @@
 
 int main()
 {
-    struct sockaddr_un server_addr, client_addr; // структура адреса для Unix domain sockets
+    struct sockaddr_un server_addr, client_addr;
 
     const int server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (server_sock < 0) {
