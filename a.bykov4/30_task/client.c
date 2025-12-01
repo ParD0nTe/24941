@@ -17,9 +17,10 @@ int main() {
         return 1;
     }
 
-    const char *msg = "hello, world and my friend!\n";
+    const char *msg = "this is client messege\n";
     write(fd, msg, strlen(msg));
 
     close(fd);
     return 0;
 }
+
