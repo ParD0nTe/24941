@@ -28,13 +28,10 @@ int main() {
     }
 
     printf("connected\n");
-    fflush(stdout);
-    usleep(200000);
 
     char buffer[256];
 
     while (1) {
-        usleep(200000);
         printf("enter text: ");
         fflush(stdout);
 
