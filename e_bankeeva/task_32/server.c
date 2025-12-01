@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/stropts.h>
+#include <errno.h>
+
 
 int server_sock;
 int clients[5];
@@ -15,12 +18,12 @@ int client_count = 0;
 
 // ./server & sleep 0.1 && ./client
 
-void handle_sigio(int sig)
+void handle_sigpoll(int sig)
 {
     int client_sock = accept(server_sock, NULL, NULL);
     if (client_sock >= 0) {
-        fcntl(client_sock, F_SETFL, O_NONBLOCK | O_ASYNC);
-        fcntl(client_sock, F_SETOWN, getpid());
+        fcntl(client_sock, F_SETFL, O_NONBLOCK);
+        ioctl(client_sock, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
 
         for (int i = 0; i < 5; i++) {
             if (clients[i] < 0) {
@@ -50,7 +53,7 @@ void handle_sigio(int sig)
             printf("client_%d: %s\n", client_id[i], buffer);
             fflush(stdout);
 
-        } else if (bytes == 0) {
+        } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
             printf("client_%d disconnected\n", client_id[i]);
             close(fd);
             clients[i] = -1;
@@ -93,14 +96,14 @@ int main() {
         return 1;
     }
 
-    fcntl(server_sock, F_SETFL, O_NONBLOCK | O_ASYNC);
-    fcntl(server_sock, F_SETOWN, getpid());
+    fcntl(server_sock, F_SETFL, O_NONBLOCK);
+    ioctl(server_sock, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
 
     struct sigaction sa;
-    sa.sa_handler = handle_sigio;
+    sa.sa_handler = handle_sigpoll;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
-    sigaction(SIGIO, &sa, NULL);
+    sigaction(SIGPOLL, &sa, NULL);
 
     printf("wait for client\n");
     fflush(stdout);
