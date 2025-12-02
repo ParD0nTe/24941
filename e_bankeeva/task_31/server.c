@@ -5,6 +5,24 @@
 #include <sys/un.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <time.h>
+
+
+void timestamp(char *buf, size_t sz) {
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    strftime(buf, sz, "[%Y-%m-%d %H:%M:%S]", &tm);
+}
+
+void start_client(const char *prog) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl(prog, prog, NULL);
+        perror("execl");
+        exit(1);
+    }
+}
 
 // ./server & sleep 0.1 && ./client
 
@@ -14,6 +32,7 @@ int main() {
 
     int clients[5];
     int client_id[5];
+    int msg_count[5] = {0};
 
     for (int i = 0; i < 5; i++) {
         clients[i] = -1;
@@ -47,6 +66,9 @@ int main() {
 
     printf("wait for client\n");
     fflush(stdout);
+
+    start_client("./client1");
+    start_client("./client2");
 
     fd_set read_fds;
     char buffer[257];
@@ -86,8 +108,9 @@ int main() {
                     client_count++;
                     client_id[i] = client_count;
 
-                    printf("new client added: client_%d\n",
-                           client_count);
+                    char ts[32];
+                    timestamp(ts, sizeof(ts));
+                    printf("%s new client added: client_%d\n", ts, client_count);
                     fflush(stdout);
                     break;
                 }
@@ -100,7 +123,9 @@ int main() {
 
                 ssize_t bytes = read(fd, buffer, sizeof(buffer) - 1);
                 if (bytes <= 0) {
-                    printf("client_%d disconnected\n", client_id[i]);
+                    char ts[32];
+                    timestamp(ts, sizeof(ts));
+                    printf("%s client_%d disconnected\n", ts, client_id[i]);
                     close(fd);
                     clients[i] = -1;
                     client_id[i] = 0;
@@ -112,8 +137,17 @@ int main() {
                 for (int j = 0; j < bytes; j++)
                     buffer[j] = (char)toupper(buffer[j]);
 
-                printf("client_%d: %s\n", client_id[i], buffer);
+                msg_count[i]++;
+
+                char ts[32];
+                timestamp(ts, sizeof(ts));
+                printf("%s client_%d: %s\n", ts, client_id[i], buffer);
                 fflush(stdout);
+
+                if (msg_count[i] >= 5) {
+                    close(fd);
+                    clients[i] = -1;
+                }
             }
         }
     }

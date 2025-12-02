@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <sys/stropts.h>
 #include <errno.h>
+#include <time.h>
 
 
 int server_sock;
@@ -17,6 +18,21 @@ int client_id[5];
 int client_count = 0;
 
 // ./server & sleep 0.1 && ./client
+
+void timestamp(char *buf, size_t sz) {
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    strftime(buf, sz, "[%Y-%m-%d %H:%M:%S]", &tm);
+}
+
+void start_client(const char *prog) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl(prog, prog, NULL);
+        perror("execl");
+        exit(1);
+    }
+}
 
 void handle_sigpoll(int sig)
 {
@@ -101,12 +117,15 @@ int main() {
 
     struct sigaction sa;
     sa.sa_handler = handle_sigpoll;
-    sigemptyset(&sa.sa_mask);
+    sigemptyset(&sa.sa_ mask);
     sa.sa_flags = 0;
     sigaction(SIGPOLL, &sa, NULL);
 
     printf("wait for client\n");
     fflush(stdout);
+
+    start_client("./client1");
+    start_client("./client2");
 
     while (1) pause();
 
