@@ -117,7 +117,7 @@ int main() {
 
     struct sigaction sa;
     sa.sa_handler = handle_sigpoll;
-    sigemptyset(&sa.sa_ mask);
+    sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGPOLL, &sa, NULL);
 
