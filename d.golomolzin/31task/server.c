@@ -7,167 +7,146 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/select.h>
+#include <time.h>
 
 #define NUM_CLIENTS 10
 
-// низкая функция чтения из дескриптора клиента (для сервера)
-int read_ (int fd) {
+typedef struct {
+    int fd;
+    struct timespec start_ts;
+    int active;
+    int num; // идентификатор клиента (например, номер из [num] в сообщении)
+} client_info_t;
 
-    // printf("Результат выполнения работы сервера:\n[upper_text]: ");
-    // считываем пока можем по одному символу
+client_info_t clients[NUM_CLIENTS];
+
+// низкая функция чтения из дескриптора клиента
+int read_(int idx) {
     char c;
-    int bytes;
-    while ( (bytes = read(fd, &c, 1)) > 0) {
-        putchar( toupper(c) );
-    }
-    
-    int fl = 0;
-    // если ошибка чтения
-    if (bytes == -1) {
-        perror("read");
-        close(fd);
-        fl = 1;
-    }
-    // если просто закрытие
-    else if (bytes == 0) {
-        close(fd);
-        fl = 1;
-    }
-    return fl;
-};
+    int fd = clients[idx].fd;
+    int bytes = read(fd, &c, 1);
 
+    if (bytes > 0) {
+        putchar(toupper((unsigned char)c));
+        fflush(stdout);
+        return 0;   
+    }
+
+    // закрытие клиента
+    if (bytes <= 0) {
+        if (bytes == -1) perror("read");
+        close(fd);
+
+        // вывод времени конца работы
+        struct timespec end_ts;
+        clock_gettime(CLOCK_MONOTONIC, &end_ts);
+
+        double diff = (end_ts.tv_sec - clients[idx].start_ts.tv_sec) +
+                      (end_ts.tv_nsec - clients[idx].start_ts.tv_nsec) / 1e9;
+
+        time_t now = time(NULL);
+        struct tm *tm = localtime(&now);
+        char tbuf[64];
+        strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", tm);
+
+        printf("\n[%d] END %s (DIFF %.6f sec)\n",
+               clients[idx].num, tbuf, diff);
+
+        clients[idx].active = 0;
+        return 1;
+    }
+
+    return 0;
+}
 
 int main () {
-
     printf("\n┌────────────────────────────────────────┐\n");
     printf("│                 СЕРВЕР                 │\n");
     printf("└────────────────────────────────────────┘\n");
 
-    // создаем сокет для локального взаимодействия
     int server_fd = socket(PF_LOCAL, SOCK_STREAM, 0);
-    if (server_fd == -1) {
-        perror("socket");
-        return 1;
-    }
-    
-    // хранится же локально, значит можно указать свой путь
-    // const char* path_socket = "/mnt/d/Desktop/VSCODE/24941/d.golomolzin/30task/socket";
-    // const char* path_socket = "/tmp/socket.sock";
-    const char* path_socket = "/home/students/24200/d.golomolzin/24941/d.golomolzin/30task/socket";
+    if (server_fd == -1) { perror("socket"); return 1; }
 
-    // если неполучилось создать И если не ошибка отсутсвия файла (ПРОСТО ОТЧИСТКА ПРЕДЫДУЩЕГО СОКЕТА)
-    if (unlink(path_socket) == -1 && errno != 2) {
-        perror("unlink");
-        close(server_fd);
-        return 1;
+    const char* path_socket = "./socket";
+    if (unlink(path_socket) == -1 && errno != ENOENT) {
+        perror("unlink"); close(server_fd); return 1;
     }
 
-    // структура для адреса Unix socket
     struct sockaddr_un address;
-    // указывает тип связи
-    address.sun_family = PF_LOCAL;
-    // запишем в address.sun_path строку с путем к сокету
-    strncpy(address.sun_path, path_socket, sizeof(address.sun_path) - 1);
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    strncpy(address.sun_path, path_socket, sizeof(address.sun_path)-1);
 
-    // привяжем к сокету fd локальный адрес struct address длиной sizeof(address)
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) == -1) {
-        perror("bind");
-        close(server_fd);
-        return 1;
+        perror("bind"); close(server_fd); return 1;
     }
 
-    // делаем возможность прослушивания соединения
-    if (listen(server_fd, NUM_CLIENTS + 1) == -1) {
-        perror("listen");
-        close(server_fd);
-        return 1;
+    if (listen(server_fd, NUM_CLIENTS+1) == -1) {
+        perror("listen"); close(server_fd); return 1;
     }
 
-    
-    int clients[NUM_CLIENTS];
-    for (size_t i = 0; i != NUM_CLIENTS; i++) clients[i] = -1;
+    for (int i = 0; i < NUM_CLIENTS; i++) {
+        clients[i].fd = -1;
+        clients[i].active = 0;
+        clients[i].num = i+1; // можно по умолчанию 1..10
+    }
+
     fd_set rfds;
-    
-    // запустим бесконечный цикл ожидания изменений
+
     while(1) {
-        // очистим набор дескрипторов
         FD_ZERO(&rfds);
-        // добавим наш (серверный) дескриптор как главный
         FD_SET(server_fd, &rfds);
-        
-        // сделаем первой инициализацией максимальный дескриптор серверным
-        int mx_df = server_fd;
+        int mx_fd = server_fd;
 
-        // пройдемся по всем дескрипторам
-        for (size_t i = 0; i != NUM_CLIENTS; i++) {
-            // и добавим их для отслеживания изменений (если не пустой)
-            if (clients[i] != -1) {
-                FD_SET( clients[i], &rfds );
+        for (int i = 0; i < NUM_CLIENTS; i++) {
+            if (clients[i].active) {
+                FD_SET(clients[i].fd, &rfds);
+                if (clients[i].fd > mx_fd) mx_fd = clients[i].fd;
             }
-            
-            // select требует первым аргументом номер максимально дескриптора
-            mx_df = (clients[i] > mx_df) ? clients[i] : mx_df;
         }
 
-        // модифицирует rfds, оставляя только те дескрипторы, на которых произошли изменения
-        int action = select(mx_df + 1, &rfds, NULL, NULL, NULL);
-        if (action == -1) {
-            perror("select");
-            return 1;
-        }
-        
+        int action = select(mx_fd+1, &rfds, NULL, NULL, NULL);
+        if (action == -1) { perror("select"); return 1; }
 
-        /* теперь мы можем проверить каждый дескриптор, чтобы актуализироваться с изменениями */
-
-        // первым делом проверим серверный (вдруг кто-то хочет подключиться)
+        // новый клиент
         if (FD_ISSET(server_fd, &rfds)) {
-            
-            // принимаем соединение
-            // можно рассматривать просто как извлечение из очереди следующего запроса на соединение
-            socklen_t len_address = sizeof(address);
-            int client_fd = accept(server_fd, (struct sockaddr*)&address, &len_address);
-            if (client_fd == -1) {
-                perror("accept");
-                continue;
-            }
+            struct sockaddr_un client_addr;
+            socklen_t client_len = sizeof(client_addr);
+            int fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+            if (fd == -1) { perror("accept"); continue; }
 
-            // если удалось принять клиента, то добавим его в отслеживаемые
-            int fl = 0; // флаг подключения (1 - получилось / 0 - нет)
-            // пройдемся по всему массиву дескрипторов
-            for (size_t i = 0; i != NUM_CLIENTS; i++) {
-                // если нашли пустую ячейку
-                if (clients[i] == -1) {
-                    // то запишем в нее дескриптор
-                    clients[i] = client_fd;
+            // ищем место
+            int fl = 0;
+            for (int i = 0; i < NUM_CLIENTS; i++) {
+                if (!clients[i].active) {
+                    clients[i].fd = fd;
+                    clients[i].active = 1;
+                    clock_gettime(CLOCK_MONOTONIC, &clients[i].start_ts);
+
+                    // вывод начала работы клиента
+                    time_t now = time(NULL);
+                    struct tm *tm = localtime(&now);
+                    char tbuf[64];
+                    strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", tm);
+                    printf("\n[%d] START %s\n", clients[i].num, tbuf);
+
                     fl = 1;
                     break;
                 }
             }
-            // если нет места для отслеживания, то просто закроем его
-            if (!fl) close(client_fd);
+            if (!fl) close(fd); // нет места
         }
 
-        // теперь можно обработать оставшихся клиентов (которые просто что-то отпраивли текстом)
-        for (size_t i = 0; i != NUM_CLIENTS; i++) {
-            // если он оказался в этом массиве после отсеивания, то нужно прочитать с него данные
-            if (FD_ISSET(clients[i], &rfds)) {
-                // считаем данные переданные клентом и выведем их
-                if ( read_(clients[i]) ) {
-                    // по сути, если для считывания ничего нету, то клиент отключается
-                    clients[i] = -1;
-                }
+        // чтение клиентов
+        for (int i = 0; i < NUM_CLIENTS; i++) {
+            if (clients[i].active && FD_ISSET(clients[i].fd, &rfds)) {
+                read_(i);
             }
         }
     }
 
-    /* тут как-бы в другом файле будет происходить подключение к сокету и отправка текста (клиент) */
-
-    // закроем все оставшиеся дексрипторы
-    for (size_t i = 0; i != NUM_CLIENTS; i++) {
-        if (clients[i] != -1) close(clients[i]);
-    }
-    // + серверный конечно же
+    for (int i = 0; i < NUM_CLIENTS; i++)
+        if (clients[i].active) close(clients[i].fd);
     close(server_fd);
-
     return 0;
 }
