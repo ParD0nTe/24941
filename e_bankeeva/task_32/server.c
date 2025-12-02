@@ -46,9 +46,11 @@ void handle_sigpoll(int sig)
                 clients[i] = client_sock;
                 client_id[i] = ++client_count;
 
-                printf("new client added: client_%d (fd=%d)\n",
-                       client_id[i], client_sock);
-                fflush(stdout);
+                char msg[128];
+                int len = snprintf(msg, sizeof(msg),
+                                   "new client added: client_%d (fd=%d)\n",
+                                   client_id[i], client_sock);
+                write(1, msg, len);
                 break;
             }
         }
@@ -66,8 +68,10 @@ void handle_sigpoll(int sig)
             for (int j = 0; j < bytes; j++)
                 buffer[j] = (char)toupper(buffer[j]);
 
-            printf("client_%d: %s\n", client_id[i], buffer);
-            fflush(stdout);
+            char msg[300];
+            int len = snprintf(msg, sizeof(msg),
+                               "client_%d: %s\n", client_id[i], buffer);
+            write(1, msg, len);
 
         } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
             printf("client_%d disconnected\n", client_id[i]);
