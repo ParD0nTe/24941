@@ -61,7 +61,7 @@ void handle_sigpoll(int sig)
         int fd = clients[i];
         if (fd < 0) continue;
 
-        ssize_t bytes = read(fd, buffer, sizeof(buffer) - 1);
+        ssize_t bytes = read(fd, buffer, 1);
         if (bytes > 0) {
 
             buffer[bytes] = '\0';
