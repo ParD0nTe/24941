@@ -46,10 +46,13 @@ void handle_sigpoll(int sig)
                 clients[i] = client_sock;
                 client_id[i] = ++client_count;
 
+                char ts[64];
+                timestamp(ts, sizeof(ts));
+
                 char msg[128];
                 int len = snprintf(msg, sizeof(msg),
-                                   "new client added: client_%d (fd=%d)\n",
-                                   client_id[i], client_sock);
+                                   "%s new client added: client_%d (fd=%d)\n",
+                                   ts, client_id[i], client_sock);
                 write(1, msg, len);
                 break;
             }
@@ -71,10 +74,11 @@ void handle_sigpoll(int sig)
             char ts[64];
             timestamp(ts, sizeof(ts));
 
-            char msg[300];
+            char msg[128];
             int len = snprintf(msg, sizeof(msg),
-                               "%s client_%d: %s\n",
-                               ts, client_id[i], buffer);
+                                   "%s new client added: client_%d (fd=%d)\n", // added timestamp
+                                   ts, client_id[i], client_sock);
+            write(1, msg, len);
 
         } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
             printf("client_%d disconnected\n", client_id[i]);
