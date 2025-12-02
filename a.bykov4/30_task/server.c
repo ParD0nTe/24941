@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SOCK_PATH "/tmp/upper.sock"
+#define SOCK_PATH "./socket"
 
 int main() {
     int srv = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -32,3 +32,4 @@ int main() {
     close(srv);
     return 0;
 }
+
