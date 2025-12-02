@@ -68,10 +68,13 @@ void handle_sigpoll(int sig)
             for (int j = 0; j < bytes; j++)
                 buffer[j] = (char)toupper(buffer[j]);
 
+            char ts[64];
+            timestamp(ts, sizeof(ts));
+
             char msg[300];
             int len = snprintf(msg, sizeof(msg),
-                               "client_%d: %s\n", client_id[i], buffer);
-            write(1, msg, len);
+                               "%s client_%d: %s\n",
+                               ts, client_id[i], buffer);
 
         } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
             printf("client_%d disconnected\n", client_id[i]);
