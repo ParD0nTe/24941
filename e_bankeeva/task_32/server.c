@@ -76,8 +76,8 @@ void handle_sigpoll(int sig)
 
             char msg[128];
             int len = snprintf(msg, sizeof(msg),
-                                   "%s new client added: client_%d (fd=%d)\n", // added timestamp
-                                   ts, client_id[i], client_sock);
+                       "%s client_%d: %s\n",
+                       ts, client_id[i], buffer);
             write(1, msg, len);
 
         } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
