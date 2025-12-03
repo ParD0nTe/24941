@@ -72,7 +72,11 @@ int main() {
     int line_number;
     while (1) {
         printf("Введите номер строки (0 для выхода): ");
-        scanf("%d", &line_number);
+        if(scanf("%d", &line_number) != 1){
+            printf("неверный формат\n");
+            while ((line_number = getchar()) != '\n' && line_number != EOF);
+            continue;
+        }
 
         if (line_number == 0) {
             break;

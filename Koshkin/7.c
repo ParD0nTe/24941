@@ -79,26 +79,29 @@ int main() {
         temp = temp->next;
         i++;
     }
+    printf("Введите номер строки (0 для выхода): ");
+    fflush(stdout);
 
-    // === Интерактивный ввод с таймаутом ===
+    fd_set fds;
+    struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+    FD_ZERO(&fds);
+    FD_SET(STDIN_FILENO, &fds);
+
+    int ret = select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
+    if (ret == 0) {
+        printf("\nВремя вышло! Выводим содержимое файла:\n");
+        print_whole_file(mapped, file_size);
+        return 0;
+    }
+
+
     int line_number;
     while (1) {
-        printf("Введите номер строки (0 для выхода, 5 секунд на ввод): ");
-        fflush(stdout);
-
-        fd_set fds;
-        struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
-        FD_ZERO(&fds);
-        FD_SET(STDIN_FILENO, &fds);
-
-        int ret = select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
-        if (ret == 0) {
-            printf("\nВремя вышло! Выводим содержимое файла:\n");
-            print_whole_file(mapped, file_size);
-            break;
+        if(scanf("%d", &line_number)!=1){
+            while (getchar() != '\n'); // Очищаем остаток строки
+            printf("неверный формат\n");
+            continue;           
         }
-
-        scanf("%d", &line_number);
 
         if (line_number == 0) break;
         if (line_number < 1 || (size_t)line_number > line_count) {

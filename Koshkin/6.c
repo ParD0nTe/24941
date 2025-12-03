@@ -94,30 +94,33 @@ int main() {
         i++;
     }
 
-    // Запрашиваем номер строки с таймаутом
+    printf("Введите номер строки (0 для выхода): ");
+    fflush(stdout);
+
+    // Настраиваем таймаут с помощью select
+    fd_set read_fds;
+    struct timeval timeout;
+    FD_ZERO(&read_fds);
+    FD_SET(STDIN_FILENO, &read_fds);
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+
+    int ready = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
+    if (ready == 0) {
+        // Таймаут
+        print_whole_file(fd);
+        return 0;
+    }
     int line_number;
     while (1) {
-        printf("Введите номер строки (0 для выхода, 5 секунд на ввод): ");
-        fflush(stdout);
-
-        // Настраиваем таймаут с помощью select
-        fd_set read_fds;
-        struct timeval timeout;
-        FD_ZERO(&read_fds);
-        FD_SET(STDIN_FILENO, &read_fds);
-        timeout.tv_sec = 5;
-        timeout.tv_usec = 0;
-
-        int ready = select(STDIN_FILENO + 1, &read_fds, NULL, NULL, &timeout);
-        if (ready == 0) {
-            // Таймаут
-            print_whole_file(fd);
-            break;
-        }
 
         // Ввод доступен, читаем номер строки
-        scanf("%d", &line_number);
-        while (getchar() != '\n'); // Очищаем остаток строки
+        if(scanf("%d", &line_number)!= 1){
+            while (getchar() != '\n'); // Очищаем остаток строки
+            printf("неверный формат\n");
+            continue;
+        }
+        
 
         if (line_number == 0) {
             break;
