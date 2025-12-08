@@ -16,18 +16,22 @@ int main(int argc, char* argv[]) {
     }
 
     int num = atoi(argv[1]);
+
     const char *msg = (num == 1 ? "hello" : "goodbye");
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
     struct sockaddr_un address = {0};
     address.sun_family = AF_UNIX;
-    strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
+    strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path)-1);
 
     connect(fd, (struct sockaddr*)&address, sizeof(address));
 
-    for (int i = 0; msg[i]; i++) {
-        write(fd, &msg[i], 1);
+    int len = strlen(msg);
+
+    for (int i = 0; i < len; i++) {
+        char c = msg[i];
+        write(fd, &c, 1);
         usleep(100000);
     }
 
