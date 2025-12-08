@@ -52,14 +52,16 @@ void handle_sigpoll(int sig)
     }
 
     for (int i = 0; i < 5; i++) {
-        int cfd = client_fd[i];
-        if (cfd < 0) continue;
+        fd = client_fd[i];
+        if (fd < 0) continue;
 
         char c;
-        ssize_t r = read(cfd, &c, 1);
+        ssize_t r = read(fd, &c, 1);
 
         if (r > 0) {
-            c = toupper((unsigned char)c);
+
+            c = toupper(c);
+
             printf("client_%d %c\n", client_num[i], c);
             fflush(stdout);
         }
@@ -67,17 +69,8 @@ void handle_sigpoll(int sig)
 
             printf("client_%d disconnected\n", client_num[i]);
 
-            close(cfd);
+            close(fd);
             client_fd[i] = -1;
-
-            int active = 0;
-            for (int k = 0; k < 5; k++)
-                if (client_fd[k] != -1) active = 1;
-
-            if (!active) {
-                print_runtime();
-                exit(0);
-            }
         }
     }
 }
