@@ -16,7 +16,6 @@ int main(int argc, char* argv[]) {
     }
 
     int num = atoi(argv[1]);
-
     const char *msg = (num == 1 ? "hello" : "goodbye");
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -29,10 +28,12 @@ int main(int argc, char* argv[]) {
 
     int len = strlen(msg);
 
-    for (int i = 0; i < len; i++) {
-        char c = msg[i];
-        write(fd, &c, 1);
-        usleep(100000);
+    for (int repeat = 0; repeat < 15; repeat++) {
+        for (int i = 0; i < len; i++) {
+            char c = msg[i];
+            write(fd, &c, 1);
+            usleep(100000);
+        }
     }
 
     close(fd);
