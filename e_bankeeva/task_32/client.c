@@ -1,58 +1,51 @@
-#include <stdio.h>
-#include <string.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+#define SOCKET_PATH "./socket"
 
-int main() {
-    const int client_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (client_sock < 0) {
-        perror("socket");
+int main(int argc, char* argv[]) {
+
+    if (argc < 2) {
+        printf("usage: %s <1|2>\n", argv[0]);
         return 1;
     }
 
-    struct sockaddr_un server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
+    int num = atoi(argv[1]);
 
-    server_addr.sun_family = AF_UNIX;
-    strncpy(server_addr.sun_path, "/tmp/unix_socket", sizeof(server_addr.sun_path) - 1);
+    const char *msg;
+    if (num == 1)
+        msg = "hello";
+    else
+        msg = "goodbye";
 
-    printf("connecting\n");
-    fflush(stdout);
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd == -1) { perror("socket"); return 1; }
 
-    if (connect(client_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
+
+    if (connect(fd, (struct sockaddr*)&address, sizeof(address)) == -1) {
         perror("connect");
-        close(client_sock);
+        close(fd);
         return 1;
     }
 
-    printf("connected\n");
-    fflush(stdout);
-    usleep(200000);
-
-    char buffer[256];
-
-    while (1) {
-        usleep(200000);
-        printf("enter text: ");
-        fflush(stdout);
-
-        if (!fgets(buffer, sizeof(buffer), stdin))
-            break;
-
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        if (strcmp(buffer, "q") == 0)
-            break;
-
-        if (send(client_sock, buffer, strlen(buffer), 0) < 0) {
-            perror("send");
-            break;
-        }
+    char buf[128];
+    snprintf(buf, sizeof(buf), "client_%d: %s\n", num, msg);
+    for (int i = 0; i < 30; i++) {
+        snprintf(buf, sizeof(buf), "client_%d: %s\n", num, msg);
+        write(fd, buf, strlen(buf));
+        usleep(100000);
     }
+    close(fd);
 
-    close(client_sock);
-
+    close(fd);
     return 0;
 }

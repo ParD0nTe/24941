@@ -11,137 +11,116 @@
 #include <errno.h>
 #include <time.h>
 
+#define SOCKET_PATH "./socket"
 
-int server_sock;
-int clients[5];
-int client_id[5];
-int client_count = 0;
-
-// ./server & sleep 0.1 && ./client
+int server_fd;
+int client_fd[5];
+int client_num[5];
+int next_client_id = 1;
 
 void timestamp(char *buf, size_t sz) {
-    time_t t = time(NULL);
-    struct tm tm = *localtime(&t);
-    strftime(buf, sz, "[%Y-%m-%d %H:%M:%S]", &tm);
-}
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
 
-void start_client(const char *prog) {
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl(prog, prog, NULL);
-        perror("execl");
-        exit(1);
-    }
+    struct tm tm_info;
+    localtime_r(&ts.tv_sec, &tm_info);
+
+    strftime(buf, sz, "%Y-%m-%d %H:%M:%S", &tm_info);
+    sprintf(buf + strlen(buf), ".%03ld", ts.tv_nsec / 1000000);
 }
 
 void handle_sigpoll(int sig)
 {
-    int client_sock = accept(server_sock, NULL, NULL);
-    if (client_sock >= 0) {
-        fcntl(client_sock, F_SETFL, O_NONBLOCK);
-        ioctl(client_sock, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
+    (void)sig;
+
+    char ts[64], out[256];
+    int fd;
+
+    while ((fd = accept(server_fd, NULL, NULL)) >= 0) {
+
+        fcntl(fd, F_SETFL, O_NONBLOCK);
+        ioctl(fd, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
 
         for (int i = 0; i < 5; i++) {
-            if (clients[i] < 0) {
-                clients[i] = client_sock;
-                client_id[i] = ++client_count;
+            if (client_fd[i] == -1) {
+                client_fd[i] = fd;
+                client_num[i] = next_client_id++;
 
-                char ts[64];
                 timestamp(ts, sizeof(ts));
-
-                char msg[128];
-                int len = snprintf(msg, sizeof(msg),
-                                   "%s new client added: client_%d (fd=%d)\n",
-                                   ts, client_id[i], client_sock);
-                write(1, msg, len);
+                printf("client_%d connected %s\n", client_num[i], ts);
+                fflush(stdout);
                 break;
             }
         }
     }
 
-    char buffer[256];
     for (int i = 0; i < 5; i++) {
-        int fd = clients[i];
+
+        fd = client_fd[i];
         if (fd < 0) continue;
 
-        ssize_t bytes = read(fd, buffer, 1);
-        if (bytes > 0) {
+        char c;
+        ssize_t r = read(fd, &c, 1);
 
-            buffer[bytes] = '\0';
-            for (int j = 0; j < bytes; j++)
-                buffer[j] = (char)toupper(buffer[j]);
+        if (r > 0) {
+            c = toupper((unsigned char)c);
 
-            char ts[64];
             timestamp(ts, sizeof(ts));
+            printf("client_%d: %s %c\n", client_num[i], ts, c);
+            fflush(stdout);
+        }
+        else if (r == 0 || (r < 0 && errno != EAGAIN)) {
 
-            char msg[128];
-            int len = snprintf(msg, sizeof(msg),
-                       "%s client_%d: %s\n",
-                       ts, client_id[i], buffer);
-            write(1, msg, len);
+            timestamp(ts, sizeof(ts));
+            printf("client_%d disconnected %s\n", client_num[i], ts);
 
-        } else if (bytes == 0 || (bytes < 0 && errno != EAGAIN)) {
-            printf("client_%d disconnected\n", client_id[i]);
             close(fd);
-            clients[i] = -1;
-            client_id[i] = 0;
+            client_fd[i] = -1;
+            client_num[i] = 0;
         }
     }
 }
 
-int main() {
-
+int main()
+{
     struct sockaddr_un addr;
 
-    for (int i = 0; i < 5; i++) {
-        clients[i] = -1;
-        client_id[i] = 0;
+    for (int i = 0; i < 5; i++)
+        client_fd[i] = -1;
+
+    server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("socket"); return 1;
     }
 
-    server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_sock < 0) {
-        perror("socket");
-        return 1;
-    }
-
-    unlink("/tmp/unix_socket");
+    unlink(SOCKET_PATH);
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, "/tmp/unix_socket", sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
-    if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(server_sock);
-        return 1;
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind"); return 1;
     }
 
-    if (listen(server_sock, 10) < 0) {
-        perror("listen");
-        close(server_sock);
-        unlink("/tmp/unix_socket");
-        return 1;
+    if (listen(server_fd, 5) < 0) {
+        perror("listen"); return 1;
     }
 
-    fcntl(server_sock, F_SETFL, O_NONBLOCK);
-    ioctl(server_sock, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
+    printf("wait for client...");
+
+    fcntl(server_fd, F_SETFL, O_NONBLOCK);
+    ioctl(server_fd, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
 
     struct sigaction sa;
     sa.sa_handler = handle_sigpoll;
-    sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
     sigaction(SIGPOLL, &sa, NULL);
 
-    printf("wait for client\n");
-    fflush(stdout);
-
-    start_client("./client1");
-    start_client("./client2");
+    printf("WAIT FOR CLIENTS...\n");
 
     while (1) pause();
-
-    close(server_sock);
-    unlink("/tmp/unix_socket");
 
     return 0;
 }

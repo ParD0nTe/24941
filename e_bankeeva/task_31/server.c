@@ -1,158 +1,122 @@
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include <ctype.h>
-#include <stdlib.h>
-#include <sys/wait.h>
+#include <sys/select.h>
 #include <time.h>
-
-
-void timestamp(char *buf, size_t sz) {
-    time_t t = time(NULL);
-    struct tm tm = *localtime(&t);
-    strftime(buf, sz, "[%Y-%m-%d %H:%M:%S]", &tm);
-}
-
-void start_client(const char *prog) {
-    pid_t pid = fork();
-    if (pid == 0) {
-        execl(prog, prog, NULL);
-        perror("execl");
-        exit(1);
-    }
-}
-
-// ./server & sleep 0.1 && ./client
+#define SOCKET_PATH "./socket"
 
 int main() {
-    int server_sock;
-    struct sockaddr_un addr;
 
-    int clients[5];
-    int client_id[5];
-    int msg_count[5] = {0};
+    int client_fd[5];
+    int client_active[5];
+    struct timespec client_start[5];
 
     for (int i = 0; i < 5; i++) {
-        clients[i] = -1;
-        client_id[i] = 0;
+        client_fd[i] = -1;
+        client_active[i] = 0;
     }
 
-    server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_sock < 0) {
-        perror("socket");
-        return 1;
-    }
+    int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (server_fd < 0) { perror("socket"); return 1; }
 
-    unlink("/tmp/unix_socket");
+    unlink(SOCKET_PATH);
 
+    struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, "/tmp/unix_socket", sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path)-1);
 
-    if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");
-        close(server_sock);
         return 1;
     }
 
-    if (listen(server_sock, 10) < 0) {
+    if (listen(server_fd, 5) < 0) {
         perror("listen");
-        close(server_sock);
-        unlink("/tmp/unix_socket");
         return 1;
     }
+    printf("wait for client...\n");
 
-    printf("wait for client\n");
-    fflush(stdout);
-
-    start_client("./client1");
-    start_client("./client2");
-
-    fd_set read_fds;
-    char buffer[257];
-    int max_fd = server_sock;
-    int client_count = 0;
+    fd_set rfds;
 
     while (1) {
-        FD_ZERO(&read_fds);
-        FD_SET(server_sock, &read_fds);
 
-        max_fd = server_sock;
+        FD_ZERO(&rfds);
+        FD_SET(server_fd, &rfds);
+        int max_fd = server_fd;
 
         for (int i = 0; i < 5; i++) {
-            if (clients[i] >= 0) {
-                FD_SET(clients[i], &read_fds);
-                if (clients[i] > max_fd)
-                    max_fd = clients[i];
+            if (client_active[i]) {
+                FD_SET(client_fd[i], &rfds);
+                if (client_fd[i] > max_fd)
+                    max_fd = client_fd[i];
             }
         }
 
-        if (select(max_fd + 1, &read_fds, NULL, NULL, NULL) < 0) {
+        if (select(max_fd + 1, &rfds, NULL, NULL, NULL) < 0) {
             perror("select");
             break;
         }
 
-        if (FD_ISSET(server_sock, &read_fds)) {
-            int client_sock = accept(server_sock, NULL, NULL);
-            if (client_sock < 0) {
-                perror("accept");
-                continue;
-            }
+        if (FD_ISSET(server_fd, &rfds)) {
+            int fd = accept(server_fd, NULL, NULL);
+            if (fd < 0) continue;
 
             for (int i = 0; i < 5; i++) {
-                if (clients[i] < 0) {
-                    clients[i] = client_sock;
+                if (!client_active[i]) {
+                    client_fd[i] = fd;
+                    client_active[i] = 1;
+                    clock_gettime(CLOCK_MONOTONIC, &client_start[i]);
 
-                    client_count++;
-                    client_id[i] = client_count;
+                    time_t t = time(NULL);
+                    printf("client_%d: conected [%s]", i+1, ctime(&t));
 
-                    char ts[32];
-                    timestamp(ts, sizeof(ts));
-                    printf("%s new client added: client_%d\n", ts, client_count);
-                    fflush(stdout);
                     break;
                 }
             }
         }
 
         for (int i = 0; i < 5; i++) {
-            int fd = clients[i];
-            if (fd >= 0 && FD_ISSET(fd, &read_fds)) {
 
-                ssize_t bytes = read(fd, buffer, sizeof(buffer) - 1);
-                if (bytes <= 0) {
-                    char ts[32];
-                    timestamp(ts, sizeof(ts));
-                    printf("%s client_%d disconnected\n", ts, client_id[i]);
-                    close(fd);
-                    clients[i] = -1;
-                    client_id[i] = 0;
-                    continue;
+            if (client_active[i] && FD_ISSET(client_fd[i], &rfds)) {
+
+                char buf[256];
+                int r = read(client_fd[i], buf, sizeof(buf) - 1);
+
+                if (r <= 0) {
+                    struct timespec end;
+                    clock_gettime(CLOCK_MONOTONIC, &end);
+
+                    double diff =
+                        (end.tv_sec - client_start[i].tv_sec) +
+                        (end.tv_nsec - client_start[i].tv_nsec) / 1e9;
+
+                    time_t t = time(NULL);
+                    printf("client_%d disconected [%s(%.3f sec)]\n",
+                           i+1, ctime(&t), diff);
+
+                    close(client_fd[i]);
+                    client_active[i] = 0;
                 }
+                else {
+                    buf[r] = '\0';
+                    buf[strcspn(buf, "\n")] = '\0';
 
-                buffer[bytes] = '\0';
+                    for (int k = 0; k < r; k++)
+                        buf[k] = toupper((unsigned char)buf[k]);
 
-                for (int j = 0; j < bytes; j++)
-                    buffer[j] = (char)toupper(buffer[j]);
-
-                msg_count[i]++;
-
-                char ts[32];
-                timestamp(ts, sizeof(ts));
-                printf("%s client_%d: %s\n", ts, client_id[i], buffer);
-                fflush(stdout);
-
-                if (msg_count[i] >= 5) {
-                    close(fd);
-                    clients[i] = -1;
+                    printf("%s\n", buf);
+                    fflush(stdout);
                 }
             }
         }
     }
 
-    close(server_sock);
-    unlink("/tmp/unix_socket");
+    close(server_fd);
     return 0;
 }
