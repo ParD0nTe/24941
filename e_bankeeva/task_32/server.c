@@ -18,14 +18,17 @@ int client_fd[5];
 int client_num[5];
 int next_id = 1;
 
-struct timespec start_ts, end_ts;
+struct timespec start_ts;
+struct timespec end_ts;
+int session_started = 0;
 
 void print_runtime() {
     clock_gettime(CLOCK_MONOTONIC, &end_ts);
+
     double sec = (end_ts.tv_sec - start_ts.tv_sec)
                + (end_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
 
-    printf("\n%.3f sec\n", sec);
+    printf("\n(%.3f sec)\n", sec);
 }
 
 void handle_sigpoll(int sig)
@@ -44,6 +47,11 @@ void handle_sigpoll(int sig)
                 client_fd[i] = fd;
                 client_num[i] = next_id++;
 
+                if (!session_started) {
+                    clock_gettime(CLOCK_MONOTONIC, &start_ts);
+                    session_started = 1;
+                }
+
                 printf("client_%d connected\n", client_num[i]);
                 fflush(stdout);
                 break;
@@ -51,7 +59,8 @@ void handle_sigpoll(int sig)
         }
     }
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++)
+    {
         int cfd = client_fd[i];
         if (cfd < 0) continue;
 
@@ -78,7 +87,7 @@ void handle_sigpoll(int sig)
             for (int k = 0; k < 5; k++)
                 if (client_fd[k] != -1) active = 1;
 
-            if (!active) {
+            if (!active && session_started) {
                 print_runtime();
                 exit(0);
             }
@@ -89,8 +98,6 @@ void handle_sigpoll(int sig)
 int main()
 {
     struct sockaddr_un addr;
-
-    clock_gettime(CLOCK_MONOTONIC, &start_ts);
 
     for (int i = 0; i < 5; i++)
         client_fd[i] = -1;
