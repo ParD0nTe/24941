@@ -55,12 +55,16 @@ void handle_sigpoll(int sig)
         int cfd = client_fd[i];
         if (cfd < 0) continue;
 
-        char c;
-        ssize_t r = read(cfd, &c, 1);
+        char buf[256];
+        ssize_t r = read(cfd, buf, sizeof(buf));
 
         if (r > 0) {
-            c = toupper((unsigned char)c);
-            printf("client_%d %c\n", client_num[i], c);
+            buf[r] = '\0';
+
+            for (int j = 0; j < r; j++)
+                buf[j] = toupper((unsigned char)buf[j]);
+
+            printf("client_%d %s\n", client_num[i], buf);
             fflush(stdout);
         }
         else if (r == 0 || (r < 0 && errno != EAGAIN)) {
