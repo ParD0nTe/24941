@@ -1,132 +1,144 @@
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <aio.h>
 #include <signal.h>
-#include <fcntl.h>
-#include <sys/stropts.h>
-#include <errno.h>
 #include <time.h>
 
 #define SOCKET_PATH "./socket"
+#define MAX_CLIENTS 5
+#define BUF_SIZE 256
 
-int server_fd;
-int client_fd[5];
-int client_num[5];
-int next_id = 1;
+struct client_info {
+    int fd;
+    struct aiocb aio;
+    char buf[BUF_SIZE];
+    int active;
+};
 
-struct timespec start_ts;
-struct timespec end_ts;
+struct client_info clients[MAX_CLIENTS];
+int active_clients = 0;
+
+struct timespec session_start, session_end;
 int session_started = 0;
 
-void print_runtime() {
-    clock_gettime(CLOCK_MONOTONIC, &end_ts);
 
-    double sec = (end_ts.tv_sec - start_ts.tv_sec)
-               + (end_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
+void aio_callback(union sigval sigval) {
+    struct client_info *c = sigval.sival_ptr;
+    int r = aio_return(&c->aio);
 
-    printf("\n(%.3f sec)\n", sec);
-}
+    if (r <= 0) {
+        close(c->fd);
+        c->active = 0;
+        active_clients--;
 
-void handle_sigpoll(int sig)
-{
-    (void)sig;
+        time_t t = time(NULL);
+        printf("client disconnected [%s]\n", ctime(&t));
 
-    int fd;
-
-    while ((fd = accept(server_fd, NULL, NULL)) >= 0) {
-
-        fcntl(fd, F_SETFL, O_NONBLOCK);
-        ioctl(fd, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
-
-        for (int i = 0; i < 5; i++) {
-            if (client_fd[i] == -1) {
-                client_fd[i] = fd;
-                client_num[i] = next_id++;
-
-                if (!session_started) {
-                    clock_gettime(CLOCK_MONOTONIC, &start_ts);
-                    session_started = 1;
-                }
-
-                printf("client_%d connected\n", client_num[i]);
-                fflush(stdout);
-                break;
-            }
+        if (active_clients == 0 && session_started) {
+            clock_gettime(CLOCK_MONOTONIC, &session_end);
+            double diff = (session_end.tv_sec - session_start.tv_sec) +
+                          (session_end.tv_nsec - session_start.tv_nsec) / 1e9;
+            printf("(%.3f sec)\n", diff);
+            session_started = 0;
         }
+        fflush(stdout);
+        return;
     }
 
-    for (int i = 0; i < 5; i++)
-    {
-        int cfd = client_fd[i];
-        if (cfd < 0) continue;
+    c->buf[r] = 0;
+    c->buf[strcspn(c->buf, "\n")] = 0;
 
-        char buf[256];
-        ssize_t r = read(cfd, buf, sizeof(buf));
+    for (int i = 0; i < r; i++)
+        c->buf[i] = toupper((unsigned char)c->buf[i]);
 
-        if (r > 0) {
-            buf[r] = '\0';
+    printf("%s\n", c->buf);
+    fflush(stdout);
 
-            for (int j = 0; j < r; j++)
-                buf[j] = toupper((unsigned char)buf[j]);
+    memset(&c->aio, 0, sizeof(struct aiocb));
+    c->aio.aio_fildes = c->fd;
+    c->aio.aio_buf = c->buf;
+    c->aio.aio_nbytes = BUF_SIZE;
+    c->aio.aio_sigevent.sigev_notify = SIGEV_THREAD;
+    c->aio.aio_sigevent.sigev_notify_function = aio_callback;
+    c->aio.aio_sigevent.sigev_value.sival_ptr = c;
 
-            printf("client_%d %s\n", client_num[i], buf);
-            fflush(stdout);
-        }
-        else if (r == 0 || (r < 0 && errno != EAGAIN)) {
-
-            printf("client_%d disconnected\n", client_num[i]);
-
-            close(cfd);
-            client_fd[i] = -1;
-
-            int active = 0;
-            for (int k = 0; k < 5; k++)
-                if (client_fd[k] != -1) active = 1;
-
-            if (!active && session_started) {
-                print_runtime();
-                exit(0);
-            }
-        }
-    }
+    if (aio_read(&c->aio) < 0)
+        perror("aio_read");
 }
 
-int main()
-{
-    struct sockaddr_un addr;
 
-    for (int i = 0; i < 5; i++)
-        client_fd[i] = -1;
+int main() {
 
-    server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        clients[i].active = 0;
+
+    int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (server_fd < 0) { perror("socket"); return 1; }
 
     unlink(SOCKET_PATH);
 
+    struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path)-1);
 
     if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind"); return 1;
+        perror("bind");
+        return 1;
     }
-
     if (listen(server_fd, 5) < 0) {
-        perror("listen"); return 1;
+        perror("listen");
+        return 1;
     }
 
-    printf("wait for clients...\n");
+    printf("wait for client...\n");
 
-    fcntl(server_fd, F_SETFL, O_NONBLOCK);
-    ioctl(server_fd, I_SETSIG, S_INPUT | S_HANGUP | S_ERROR);
+    while (1) {
+        int fd = accept(server_fd, NULL, NULL);
+        if (fd < 0) continue;
 
-    struct sigaction sa = {0};
-    sa.sa_handler = handle_sigpoll;
-    sigaction(SIGPOLL, &sa, NULL);
+        int idx = -1;
+        for (int i = 0; i < MAX_CLIENTS; i++)
+            if (!clients[i].active) { idx = i; break; }
 
-    while (1) pause();
+        if (idx < 0) {
+            printf("Too many clients\n");
+            close(fd);
+            continue;
+        }
+
+        struct client_info *c = &clients[idx];
+        c->fd = fd;
+        c->active = 1;
+
+        if (active_clients == 0) {
+            clock_gettime(CLOCK_MONOTONIC, &session_start);
+            session_started = 1;
+        }
+        active_clients++;
+
+        time_t t = time(NULL);
+        printf("client_%d connected [%s]\n", idx+1, ctime(&t));
+
+        memset(&c->aio, 0, sizeof(struct aiocb));
+        c->aio.aio_fildes = fd;
+        c->aio.aio_buf = c->buf;
+        c->aio.aio_nbytes = BUF_SIZE;
+        c->aio.aio_sigevent.sigev_notify = SIGEV_THREAD;
+        c->aio.aio_sigevent.sigev_notify_function = aio_callback;
+        c->aio.aio_sigevent.sigev_value.sival_ptr = c;
+
+        if (aio_read(&c->aio) < 0)
+            perror("aio_read");
+    }
+
+    close(server_fd);
+    return 0;
 }
