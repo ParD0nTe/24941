@@ -89,7 +89,6 @@ int main() {
         }
 
         for (int i = 0; i < 5; i++) {
-
             if (client_active[i] && FD_ISSET(client_fd[i], &rfds)) {
 
                 char buf[256];

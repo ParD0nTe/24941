@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     int len = strlen(msg);
 
-    for (int repeat = 0; repeat < 15; repeat++) {
+    for (int repeat = 0; repeat < 5; repeat++) {
         for (int i = 0; i < len; i++) {
             char c = msg[i];
             write(fd, &c, 1);

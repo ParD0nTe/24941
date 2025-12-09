@@ -25,7 +25,7 @@ void print_runtime() {
     double sec = (end_ts.tv_sec - start_ts.tv_sec)
                + (end_ts.tv_nsec - start_ts.tv_nsec) / 1e9;
 
-    printf("\n=== SERVER RUNTIME: %.3f sec ===\n", sec);
+    printf("\n%.3f sec\n", sec);
 }
 
 void handle_sigpoll(int sig)
