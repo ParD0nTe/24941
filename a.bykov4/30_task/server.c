@@ -1,35 +1,66 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <unistd.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <string.h>
 
-#define SOCK_PATH "./socket"
+#define SOCKET_PATH "./socket"
+#define BUFFER_SIZE 1024
 
-int main() {
-    int srv = socket(AF_UNIX, SOCK_STREAM, 0);
+int main()
+{
+    int server_fd, client_fd;
+    struct sockaddr_un server_addr, client_addr;
+    socklen_t client_len;
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_read;
 
-    struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    strncpy(addr.sun_path, SOCK_PATH, sizeof(addr.sun_path)-1);
+    unlink(SOCKET_PATH);
 
-    unlink(SOCK_PATH);
-    bind(srv, (struct sockaddr*)&addr, sizeof(addr));
-    listen(srv, 1);
+    server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
 
-    int cli = accept(srv, NULL, NULL);
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sun_family = AF_UNIX;
+    strncpy(server_addr.sun_path, SOCKET_PATH, sizeof(server_addr.sun_path) - 1);
 
-    char buf[256];
-    ssize_t n;
-
-    while ((n = read(cli, buf, sizeof(buf))) > 0) {
-        for (int i = 0; i < n; i++)
-            buf[i] = toupper((unsigned char)buf[i]);
-        write(STDOUT_FILENO, buf, n);
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1)
+    {
+        perror("bind");
+        close(server_fd);
+        exit(EXIT_FAILURE);
     }
 
-    close(cli);
-    close(srv);
+    printf("Server listening on %s\n", SOCKET_PATH);
+
+    if (listen(server_fd, 1) == -1)
+    {
+        perror("listen");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    client_len = sizeof(client_addr);
+    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+
+    printf("Client connected\n");
+
+    while ((bytes_read = read(client_fd, buffer, BUFFER_SIZE - 1)) > 0)
+    {
+        buffer[bytes_read] = '\0';
+        for (ssize_t i = 0; i < bytes_read; i++)
+            buffer[i] = toupper((unsigned char)buffer[i]);
+
+        printf("Received: %s", buffer);
+        fflush(stdout);
+    }
+
+    printf("Client disconnected\n");
+
+    close(client_fd);
+    close(server_fd);
+    unlink(SOCKET_PATH);
+
     return 0;
 }
-
