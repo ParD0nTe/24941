@@ -13,7 +13,7 @@
 
 #define SOCKET_PATH "./socket"
 
-struct client_info {
+struct client {
     int fd;
     struct aiocb aio;
     char buf[256];
@@ -21,7 +21,7 @@ struct client_info {
     int id;
 };
 
-struct client_info clients[5];
+struct client clients[5];
 int active_clients = 0;
 
 struct timespec session_start, session_end;
@@ -29,7 +29,7 @@ int session_started = 0;
 
 
 void aio_callback(union sigval sigval) {
-    struct client_info *c = sigval.sival_ptr;
+    struct client *c = sigval.sival_ptr;
     int r = aio_return(&c->aio);
 
     if (r <= 0) {
@@ -108,12 +108,11 @@ int main() {
             if (!clients[i].active) { idx = i; break; }
 
         if (idx < 0) {
-            printf("Too many clients\n");
             close(fd);
             continue;
         }
 
-        struct client_info *c = &clients[idx];
+        struct client *c = &clients[idx];
         c->fd = fd;
         c->active = 1;
         c->id = idx + 1;
