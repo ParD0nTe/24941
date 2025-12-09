@@ -20,6 +20,7 @@ struct client_info {
     struct aiocb aio;
     char buf[BUF_SIZE];
     int active;
+    int id;
 };
 
 struct client_info clients[MAX_CLIENTS];
@@ -58,7 +59,7 @@ void aio_callback(union sigval sigval) {
     for (int i = 0; i < r; i++)
         c->buf[i] = toupper((unsigned char)c->buf[i]);
 
-    printf("%s\n", c->buf);
+    printf("client_%d: %s\n", c->id, c->buf);
     fflush(stdout);
 
     memset(&c->aio, 0, sizeof(struct aiocb));
@@ -117,6 +118,7 @@ int main() {
         struct client_info *c = &clients[idx];
         c->fd = fd;
         c->active = 1;
+        c->id = idx + 1;
 
         if (active_clients == 0) {
             clock_gettime(CLOCK_MONOTONIC, &session_start);
