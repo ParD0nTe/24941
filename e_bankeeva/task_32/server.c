@@ -12,18 +12,16 @@
 #include <time.h>
 
 #define SOCKET_PATH "./socket"
-#define MAX_CLIENTS 5
-#define BUF_SIZE 256
 
 struct client_info {
     int fd;
     struct aiocb aio;
-    char buf[BUF_SIZE];
+    char buf[256];
     int active;
     int id;
 };
 
-struct client_info clients[MAX_CLIENTS];
+struct client_info clients[5];
 int active_clients = 0;
 
 struct timespec session_start, session_end;
@@ -65,7 +63,7 @@ void aio_callback(union sigval sigval) {
     memset(&c->aio, 0, sizeof(struct aiocb));
     c->aio.aio_fildes = c->fd;
     c->aio.aio_buf = c->buf;
-    c->aio.aio_nbytes = BUF_SIZE;
+    c->aio.aio_nbytes = 256;
     c->aio.aio_sigevent.sigev_notify = SIGEV_THREAD;
     c->aio.aio_sigevent.sigev_notify_function = aio_callback;
     c->aio.aio_sigevent.sigev_value.sival_ptr = c;
@@ -77,7 +75,7 @@ void aio_callback(union sigval sigval) {
 
 int main() {
 
-    for (int i = 0; i < MAX_CLIENTS; i++)
+    for (int i = 0; i < 5; i++)
         clients[i].active = 0;
 
     int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -106,7 +104,7 @@ int main() {
         if (fd < 0) continue;
 
         int idx = -1;
-        for (int i = 0; i < MAX_CLIENTS; i++)
+        for (int i = 0; i < 5; i++)
             if (!clients[i].active) { idx = i; break; }
 
         if (idx < 0) {
@@ -132,7 +130,7 @@ int main() {
         memset(&c->aio, 0, sizeof(struct aiocb));
         c->aio.aio_fildes = fd;
         c->aio.aio_buf = c->buf;
-        c->aio.aio_nbytes = BUF_SIZE;
+        c->aio.aio_nbytes = 256;
         c->aio.aio_sigevent.sigev_notify = SIGEV_THREAD;
         c->aio.aio_sigevent.sigev_notify_function = aio_callback;
         c->aio.aio_sigevent.sigev_value.sival_ptr = c;
