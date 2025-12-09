@@ -14,7 +14,11 @@ int main() {
 
     int client_fd[5];
     int client_active[5];
-    struct timespec client_start[5];
+    int active_clients = 0;
+
+    struct timespec session_start;
+    struct timespec session_end;
+    int session_started = 0;
 
     for (int i = 0; i < 5; i++) {
         client_fd[i] = -1;
@@ -71,8 +75,11 @@ int main() {
                 if (!client_active[i]) {
                     client_fd[i] = fd;
                     client_active[i] = 1;
-                    clock_gettime(CLOCK_MONOTONIC, &client_start[i]);
-
+                    if (active_clients == 0) {
+                        clock_gettime(CLOCK_MONOTONIC, &session_start);
+                        session_started = 1;
+                    }
+                    active_clients++;
                     time_t t = time(NULL);
                     printf("client_%d: conected [%s]", i+1, ctime(&t));
 
@@ -89,19 +96,23 @@ int main() {
                 int r = read(client_fd[i], buf, sizeof(buf) - 1);
 
                 if (r <= 0) {
-                    struct timespec end;
-                    clock_gettime(CLOCK_MONOTONIC, &end);
-
-                    double diff =
-                        (end.tv_sec - client_start[i].tv_sec) +
-                        (end.tv_nsec - client_start[i].tv_nsec) / 1e9;
-
-                    time_t t = time(NULL);
-                    printf("client_%d disconected [%s(%.3f sec)]\n",
-                           i+1, ctime(&t), diff);
-
                     close(client_fd[i]);
                     client_active[i] = 0;
+                    active_clients--;
+
+                    time_t t = time(NULL);
+                    printf("client_%d disconnected [%s]\n", i+1, ctime(&t));
+
+                    if (active_clients == 0 && session_started) {
+                        clock_gettime(CLOCK_MONOTONIC, &session_end);
+
+                        double diff =
+                            (session_end.tv_sec - session_start.tv_sec) +
+                            (session_end.tv_nsec - session_start.tv_nsec) / 1e9;
+
+                        printf("(%.3f sec)\n", diff);
+                        session_started = 0;
+                    }
                 }
                 else {
                     buf[r] = '\0';

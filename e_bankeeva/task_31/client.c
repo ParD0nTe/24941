@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
 
     char buf[128];
     snprintf(buf, sizeof(buf), "client_%d: %s\n", num, msg);
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < 5; i++) {
         snprintf(buf, sizeof(buf), "client_%d: %s\n", num, msg);
         write(fd, buf, strlen(buf));
         usleep(100000);
