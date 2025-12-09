@@ -5,17 +5,33 @@
 #include <unistd.h>      // read, write, close, unlink
 #include <sys/socket.h>  // socket, bind, listen, accept
 #include <sys/un.h>      // sockaddr_un
+#include <time.h>
 
 #define SOCKET_PATH "/tmp/upper_socket"
 #define BUF_SIZE 1024
 
+
+typedef struct {
+    int fd;                // файловый дескриптор клиента
+    int active;            // признак, что клиент существует
+    int id;                // номер клиента (1..n)
+    struct timespec start; // время начала работы клиента
+} client_t;
+
+client_t clients[FD_SETSIZE]; // массив клиентов как у тебя, но расширенный
+
 int main(void) {
     int server_fd;
+
     // ! много клиентов - все нули !
-    int client_fds[FD_SETSIZE];
+    int client_fds[FD_SETSIZE]; // оставляем, хотя теперь не основной массив
     int client_count = 0;
-    for (int i = 0; i < FD_SETSIZE; i++)
+    for (int i = 0; i < FD_SETSIZE; i++) {
         client_fds[i] = -1;
+        clients[i].active = 0;
+        clients[i].id = i + 1;
+    }
+
     struct sockaddr_un addr;
     char buf[BUF_SIZE];
     ssize_t n; // сколько байт прочитали
@@ -36,6 +52,8 @@ int main(void) {
     // Копируем путь к сокету
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
+    unlink(SOCKET_PATH);
+
     // 3. привязываем сокет к пути в файловой системе
     // bind - прикрепить сокет к адресу
     if (bind(server_fd, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
@@ -44,14 +62,14 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
-    // 4. начинаем слушать ! увеличили очередь для 31го !
+    // 4. начинаем слушать
     if (listen(server_fd, 10) == -1) {
         perror("listen");
         close(server_fd);
         exit(EXIT_FAILURE);
     }
 
-    printf("сервер запущен, ждет подключения");
+    printf("сервер запущен, ждет подключения\n");
 
     while (1) {
         // Для управления fd_set используются макросы:
@@ -66,10 +84,10 @@ int main(void) {
 
         // следим за клиентскими сокетами
         for (int i = 0; i < FD_SETSIZE; i++) {
-            if (client_fds[i] != -1) {
-                FD_SET(client_fds[i], &readfds);
-                if (client_fds[i] > max_fd)
-                    max_fd = client_fds[i];
+            if (clients[i].active) {
+                FD_SET(clients[i].fd, &readfds);
+                if (clients[i].fd > max_fd)
+                    max_fd = clients[i].fd;
             }
         }
 
@@ -81,20 +99,19 @@ int main(void) {
         }
 
         // ------- 6. подключение клиента ------
-        // isset правшивает у результата select(), был ли server_fd помечен как готовый для чтения
         if (FD_ISSET(server_fd, &readfds)) {
-            // если да - принимаем новое соединение
             int new_fd = accept(server_fd, NULL, NULL);
             if (new_fd == -1) {
                 perror("accept");
             } else {
-                // добавляем в список клиентов
                 int placed = 0;
                 for (int i = 0; i < FD_SETSIZE; i++) {
-                    if (client_fds[i] == -1) {
-                        client_fds[i] = new_fd;
+                    if (!clients[i].active) {
+                        clients[i].active = 1;
+                        clients[i].fd = new_fd;
+                        clock_gettime(CLOCK_MONOTONIC, &clients[i].start); // время старта
+                        printf("[SERVER] START client %d (fd=%d)\n", clients[i].id, new_fd);
                         placed = 1;
-                        printf("[SERVER] Новый клиент fd=%d\n", new_fd);
                         break;
                     }
                 }
@@ -107,27 +124,29 @@ int main(void) {
 
         // ------- 7. тексты от клиентов ---------
         for (int i = 0; i < FD_SETSIZE; i++) {
-            int fd = client_fds[i];
-            if (fd != -1 && FD_ISSET(fd, &readfds)) {
-                char buf[BUF_SIZE];
-                ssize_t n = read(fd, buf, BUF_SIZE);
+            if (clients[i].active && FD_ISSET(clients[i].fd, &readfds)) {
+
+                char c;
+                ssize_t n = read(clients[i].fd, &c, 1);
 
                 if (n > 0) {
-                    // переводим в верхний регистр
-                    for (ssize_t j = 0; j < n; j++)
-                        buf[j] = toupper((unsigned char)buf[j]);
-
-                    // выводим в stdout сервера
-                    write(STDOUT_FILENO, buf, n);
-                } else if (n == 0) {
+                    c = toupper((unsigned char)c);
+                    write(STDOUT_FILENO, &c, 1);
+                }
+                else {
                     // клиент отключился
-                    printf("[SERVER] Клиент fd=%d отключился\n", fd);
-                    close(fd);
-                    client_fds[i] = -1;
-                } else {
-                    perror("read");
-                    close(fd);
-                    client_fds[i] = -1;
+                    struct timespec end;
+                    clock_gettime(CLOCK_MONOTONIC, &end);
+
+                    double diff =
+                            (end.tv_sec - clients[i].start.tv_sec) +
+                            (end.tv_nsec - clients[i].start.tv_nsec) / 1e9;
+
+                    printf("\n[SERVER] END client %d (fd=%d), alive %.6f sec\n",
+                           clients[i].id, clients[i].fd, diff);
+
+                    close(clients[i].fd);
+                    clients[i].active = 0;
                 }
             }
         }
@@ -138,9 +157,3 @@ int main(void) {
 
     return 0;
 }
-
-
-
-
-
-

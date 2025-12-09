@@ -4,6 +4,7 @@
 #include <unistd.h>      // read, write, close
 #include <sys/socket.h>  // socket, connect
 #include <sys/un.h>      // sockaddr_un
+#include <time.h>        // rand
 
 #define SOCKET_PATH "/tmp/upper_socket"
 #define BUF_SIZE 1024
@@ -15,7 +16,7 @@ int main(void) {
     ssize_t n; // сколько байт прочитали
 
     // 1. создаем сокет
-    // AF_UNIX  → сокет для локального общения через файл (не через интернет)
+    // AF_UNIX  → сокет для локального общения через файл (не через internet)
     // SOCK_STREAM → потоковое соединение, как TCP (надёжная передача байтов)
     // 0 → использовать протокол по умолчанию для такого типа сокета
     sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -36,6 +37,24 @@ int main(void) {
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
+
+    // --- ДОБАВЛЕНО: отправка нескольких сообщений для задачи 32 ---
+    srand(time(NULL) ^ getpid());
+
+    const char *msgs[] = {
+            "BBB2 hello ",
+            "BBB2 part ",
+            "BBB2 segment "
+    };
+    int count_msgs = sizeof(msgs) / sizeof(msgs[0]);
+
+    for (int i = 0; i < 5; i++) {
+        const char *m = msgs[rand() % count_msgs];
+        write(sock_fd, m, strlen(m));
+
+        usleep((rand() % 300 + 100) * 1000); // задержка 100–400 мс
+    }
+    // --- КОНЕЦ ДОБАВЛЕНОГО БЛОКА ---
 
     // 4. читаем из stdin и отправляем всё серверу
     // Можно просто ввести текст руками и нажать Ctrl+D, чтобы закончить
@@ -58,9 +77,5 @@ int main(void) {
 }
 
 // как запустить
-//  gcc server.c -o server
-//  gcc client.c -o client
-//  ./server
-//  в дргуом терминае - ./client + какой-то текст
-
-
+//  gcc client_2.c -o client_2
+//  ./client_2

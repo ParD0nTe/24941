@@ -4,6 +4,7 @@
 #include <unistd.h>      // read, write, close
 #include <sys/socket.h>  // socket, connect
 #include <sys/un.h>      // sockaddr_un
+#include <time.h>        // rand
 
 #define SOCKET_PATH "/tmp/upper_socket"
 #define BUF_SIZE 1024
@@ -37,6 +38,24 @@ int main(void) {
         exit(EXIT_FAILURE);
     }
 
+    // --- ДОБАВЛЕНО: отправка нескольких сообщений для задачи 32 ---
+    srand(time(NULL) ^ getpid());
+
+    const char *msgs[] = {
+            "CCC3 hello ",
+            "CCC3 part ",
+            "CCC3 segment "
+    };
+    int count_msgs = sizeof(msgs) / sizeof(msgs[0]);
+
+    for (int i = 0; i < 5; i++) {
+        const char *m = msgs[rand() % count_msgs];
+        write(sock_fd, m, strlen(m));
+
+        usleep((rand() % 300 + 100) * 1000); // задержка 100–400 мс
+    }
+    // --- КОНЕЦ ДОБАВЛЕНОГО БЛОКА ---
+
     // 4. читаем из stdin и отправляем всё серверу
     // Можно просто ввести текст руками и нажать Ctrl+D, чтобы закончить
     while ((n = read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
@@ -58,8 +77,5 @@ int main(void) {
 }
 
 // как запустить
-//  gcc server.c -o server
-//  gcc client.c -o client
-//  ./server
-//  в дргуом терминае - ./client + какой-то текст
-
+//  gcc client_3.c -o client_3
+//  ./client_3
